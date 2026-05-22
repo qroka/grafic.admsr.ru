@@ -1,329 +1,287 @@
 <script setup lang="ts">
-import { useTemplateRef, h, ref, computed, watch, resolveComponent } from 'vue'
-import { upperFirst } from 'scule'
-import type { TableColumn } from '@nuxt/ui'
-import { useFetch } from '@vueuse/core'
-import { getPaginationRowModel, type Row } from '@tanstack/table-core'
-import type { User } from '../types'
+import { computed, h, ref, resolveComponent, watch } from 'vue'
+import { useHead } from '@unhead/vue'
+import type { TableColumn, TableRow } from '@nuxt/ui'
+import {
+  fetchCrmUsers,
+  fetchCrmUsersMeta,
+  type ApiCrmUser,
+  type CrmUsersMetaResponse,
+} from '../api/crm-users'
+import { formatPermissionSummary } from '../constants/crm-user-fields'
+import { useAuth } from '../composables/useAuth'
+import CrmUserSlideover from '../components/customers/CrmUserSlideover.vue'
 
-const UAvatar = resolveComponent('UAvatar')
-const UButton = resolveComponent('UButton')
-const UBadge = resolveComponent('UBadge')
-const UDropdownMenu = resolveComponent('UDropdownMenu')
-const UCheckbox = resolveComponent('UCheckbox')
-
-const toast = useToast()
-const table = useTemplateRef('table')
-
-const columnFilters = ref([{
-  id: 'email',
-  value: ''
-}])
-const columnVisibility = ref()
-const rowSelection = ref({ 1: true })
-
-const { data, isFetching } = useFetch('https://dashboard-template.nuxt.dev/api/customers', { initialData: [] }).json<User[]>()
-
-function getRowItems(row: Row<User>) {
-  return [
-    {
-      type: 'label',
-      label: 'Actions'
-    },
-    {
-      label: 'Copy customer ID',
-      icon: 'i-lucide-copy',
-      onSelect() {
-        navigator.clipboard.writeText(row.original.id.toString())
-        toast.add({
-          title: 'Copied to clipboard',
-          description: 'Customer ID copied to clipboard'
-        })
-      }
-    },
-    {
-      type: 'separator'
-    },
-    {
-      label: 'View customer details',
-      icon: 'i-lucide-list'
-    },
-    {
-      label: 'View customer payments',
-      icon: 'i-lucide-wallet'
-    },
-    {
-      type: 'separator'
-    },
-    {
-      label: 'Delete customer',
-      icon: 'i-lucide-trash',
-      color: 'error',
-      onSelect() {
-        toast.add({
-          title: 'Customer deleted',
-          description: 'The customer has been deleted.'
-        })
-      }
-    }
-  ]
+const t = {
+  title: '\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438 CRM',
+  loadFail: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439',
+  reqErr: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u043f\u0440\u043e\u0441\u0430',
+  fio: '\u0424\u0418\u041e',
+  login: '\u041b\u043e\u0433\u0438\u043d',
+  pass: '\u041f\u0430\u0440\u043e\u043b\u044c',
+  passMasked: '******',
+  email: 'Email',
+  rights: '\u041f\u0440\u0430\u0432\u0430',
+  info: '\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435',
+  active: '\u0410\u043a\u0442\u0438\u0432\u0435\u043d',
+  yes: '\u0414\u0430',
+  no: '\u041d\u0435\u0442',
+  saved: '\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e',
+  created: '\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c \u0441\u043e\u0437\u0434\u0430\u043d',
+  saveErr: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f',
+  saveFail: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c',
+  refresh: '\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c',
+  add: '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c',
+  adminOnly: '\u0420\u0430\u0437\u0434\u0435\u043b \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u0430\u043c.',
+  total: '\u0412\u0441\u0435\u0433\u043e:',
+  activeN: '\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0445:',
+  searchPh: '\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0424\u0418\u041e, \u043b\u043e\u0433\u0438\u043d\u0443, email',
+  notFound: '\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u044b',
 }
 
-const columns: TableColumn<User>[] = [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(UCheckbox, {
-        'modelValue': table.getIsSomePageRowsSelected()
-          ? 'indeterminate'
-          : table.getIsAllPageRowsSelected(),
-        'onUpdate:modelValue': (value: boolean | 'indeterminate') =>
-          table.toggleAllPageRowsSelected(!!value),
-        'ariaLabel': 'Select all'
-      }),
-    cell: ({ row }) =>
-      h(UCheckbox, {
-        'modelValue': row.getIsSelected(),
-        'onUpdate:modelValue': (value: boolean | 'indeterminate') => row.toggleSelected(!!value),
-        'ariaLabel': 'Select row'
-      })
-  },
-  {
-    accessorKey: 'id',
-    header: 'ID'
-  },
+const emptyCell = '-'
+
+useHead({ title: t.title })
+
+const { canViewLogs } = useAuth()
+const toast = useToast()
+
+const loading = ref(false)
+const searchQuery = ref('')
+const users = ref<ApiCrmUser[]>([])
+const meta = ref<CrmUsersMetaResponse | null>(null)
+const slideoverOpen = ref(false)
+const slideoverMode = ref<'view' | 'create'>('view')
+const selectedUser = ref<ApiCrmUser | null>(null)
+
+const UBadge = resolveComponent('UBadge')
+
+const levelLabel = (value: number) =>
+  meta.value?.accessLevels.find(l => l.value === value)?.label ?? String(value)
+
+function rightsPreview(user: ApiCrmUser): string {
+  if (!meta.value)
+    return emptyCell
+  const lines = formatPermissionSummary(
+    user.permissions,
+    meta.value.permissionModules,
+    levelLabel,
+  )
+  if (user.schedulePermission)
+    lines.push(`${meta.value.scheduleModule.label}: ${t.yes}`)
+  return lines.length ? lines.slice(0, 3).join('; ') + (lines.length > 3 ? '\u2026' : '') : emptyCell
+}
+
+async function loadMeta() {
+  try {
+    meta.value = await fetchCrmUsersMeta()
+  } catch {
+    meta.value = null
+  }
+}
+
+async function loadUsers() {
+  loading.value = true
+  try {
+    users.value = await fetchCrmUsers(searchQuery.value)
+  } catch (e) {
+    users.value = []
+    toast.add({
+      title: t.loadFail,
+      description: e instanceof Error ? e.message : t.reqErr,
+      color: 'error',
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+async function initPage() {
+  await loadMeta()
+  await loadUsers()
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+watch(searchQuery, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void loadUsers(), 300)
+})
+
+watch(canViewLogs, (allowed) => {
+  if (allowed)
+    void initPage()
+}, { immediate: true })
+
+const activeCount = computed(() => users.value.filter(u => u.active).length)
+
+function openUserCard(user: ApiCrmUser) {
+  selectedUser.value = user
+  slideoverMode.value = 'view'
+  slideoverOpen.value = true
+}
+
+function openCreate() {
+  selectedUser.value = null
+  slideoverMode.value = 'create'
+  slideoverOpen.value = true
+}
+
+function onTableSelect(event: Event, row: TableRow<ApiCrmUser>) {
+  const target = event.target as HTMLElement | undefined
+  if (target?.closest('button, a, input, [role="checkbox"]'))
+    return
+  openUserCard(row.original)
+}
+
+function upsertUser(user: ApiCrmUser) {
+  const idx = users.value.findIndex(u => u.id === user.id)
+  if (idx >= 0)
+    users.value[idx] = user
+  else
+    users.value = [user, ...users.value].sort((a, b) => {
+      if (a.active !== b.active)
+        return a.active ? -1 : 1
+      return a.name.localeCompare(b.name, 'ru')
+    })
+  selectedUser.value = user
+}
+
+function onSlideoverSaved(user: ApiCrmUser) {
+  upsertUser(user)
+  toast.add({ title: t.saved, color: 'success' })
+}
+
+function onSlideoverCreated(user: ApiCrmUser) {
+  upsertUser(user)
+  slideoverMode.value = 'view'
+  toast.add({ title: t.created, color: 'success' })
+}
+
+const columns: TableColumn<ApiCrmUser>[] = [
   {
     accessorKey: 'name',
-    header: 'Name',
+    header: t.fio,
     cell: ({ row }) => {
-      return h('div', { class: 'flex items-center gap-3' }, [
-        h(UAvatar, {
-          ...row.original.avatar,
-          size: 'lg'
-        }),
-        h('div', undefined, [
-          h('p', { class: 'font-medium text-highlighted' }, row.original.name),
-          h('p', { class: '' }, `@${row.original.name}`)
-        ])
+      const u = row.original
+      return h('div', { class: 'min-w-0' }, [
+        h('p', { class: 'font-medium text-highlighted truncate' }, u.name),
+        h('p', { class: 'text-xs text-muted truncate' }, u.login),
       ])
-    }
+    },
+  },
+  {
+    accessorKey: 'password',
+    header: t.pass,
+    cell: ({ row }) => {
+      const u = row.original
+      return h(
+        'span',
+        { class: 'font-mono text-sm text-muted' },
+        u.passwordMasked ? t.passMasked : (u.password || emptyCell),
+      )
+    },
   },
   {
     accessorKey: 'email',
-    header: ({ column }) => {
-      const isSorted = column.getIsSorted()
-
-      return h(UButton, {
-        color: 'neutral',
-        variant: 'ghost',
-        label: 'Email',
-        icon: isSorted
-          ? isSorted === 'asc'
-            ? 'i-lucide-arrow-up-narrow-wide'
-            : 'i-lucide-arrow-down-wide-narrow'
-          : 'i-lucide-arrow-up-down',
-        class: '-mx-2.5',
-        onClick: () => column.toggleSorting(column.getIsSorted() === 'asc')
-      })
-    }
+    header: t.email,
+    cell: ({ row }) => h('span', { class: 'line-clamp-2 text-sm text-muted' }, row.original.email || emptyCell),
   },
   {
-    accessorKey: 'location',
-    header: 'Location',
-    cell: ({ row }) => row.original.location
+    id: 'rights',
+    header: t.rights,
+    cell: ({ row }) => h('span', { class: 'line-clamp-3 text-xs text-muted' }, rightsPreview(row.original)),
   },
   {
-    accessorKey: 'status',
-    header: 'Status',
-    filterFn: 'equals',
-    cell: ({ row }) => {
-      const color = {
-        subscribed: 'success' as const,
-        unsubscribed: 'error' as const,
-        bounced: 'warning' as const
-      }[row.original.status]
-
-      return h(UBadge, { class: 'capitalize', variant: 'subtle', color }, () =>
-        row.original.status
-      )
-    }
+    accessorKey: 'info',
+    header: t.info,
+    cell: ({ row }) => h('span', { class: 'line-clamp-2 text-sm' }, row.original.info || emptyCell),
   },
   {
-    id: 'actions',
-    cell: ({ row }) => {
-      return h(
-        'div',
-        { class: 'text-right' },
-        h(
-          UDropdownMenu,
-          {
-            content: {
-              align: 'end'
-            },
-            items: getRowItems(row)
-          },
-          () =>
-            h(UButton, {
-              icon: 'i-lucide-ellipsis-vertical',
-              color: 'neutral',
-              variant: 'ghost',
-              class: 'ml-auto'
-            })
-        )
-      )
-    }
-  }
+    accessorKey: 'active',
+    header: t.active,
+    cell: ({ row }) => row.original.active
+      ? h(UBadge, { color: 'success', variant: 'subtle', label: t.yes })
+      : h(UBadge, { color: 'neutral', variant: 'subtle', label: t.no }),
+  },
 ]
-
-const statusFilter = ref('all')
-
-watch(() => statusFilter.value, (newVal) => {
-  if (!table?.value?.tableApi) return
-
-  const statusColumn = table.value.tableApi.getColumn('status')
-  if (!statusColumn) return
-
-  if (newVal === 'all') {
-    statusColumn.setFilterValue(undefined)
-  } else {
-    statusColumn.setFilterValue(newVal)
-  }
-})
-
-const email = computed({
-  get: (): string => {
-    return (table.value?.tableApi?.getColumn('email')?.getFilterValue() as string) || ''
-  },
-  set: (value: string) => {
-    table.value?.tableApi?.getColumn('email')?.setFilterValue(value || undefined)
-  }
-})
-
-const pagination = ref({
-  pageIndex: 0,
-  pageSize: 10
-})
 </script>
 
 <template>
-  <UDashboardPanel id="customers">
+  <UDashboardPanel id="crm-users">
     <template #header>
-      <UDashboardNavbar title="Customers">
+      <UDashboardNavbar :title="t.title">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
-
         <template #right>
-          <CustomersAddModal />
+          <UButton
+            :label="t.add"
+            icon="i-lucide-plus"
+            color="primary"
+            variant="soft"
+            @click="openCreate"
+          />
+          <UButton
+            icon="i-lucide-refresh-cw"
+            color="neutral"
+            variant="ghost"
+            :loading="loading"
+            :aria-label="t.refresh"
+            @click="initPage"
+          />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-1.5">
-        <UInput
-          v-model="email"
-          class="max-w-sm"
-          icon="i-lucide-search"
-          placeholder="Filter emails..."
+      <div v-if="!canViewLogs" class="p-6 text-sm text-muted">
+        {{ t.adminOnly }}
+      </div>
+
+      <template v-else>
+        <UContainer class="flex flex-col gap-4 py-4">
+          <div class="flex flex-wrap items-center gap-3 text-sm text-muted">
+            <span>{{ t.total }} <strong class="text-default">{{ users.length }}</strong></span>
+            <span>{{ t.activeN }} <strong class="text-default">{{ activeCount }}</strong></span>
+          </div>
+
+          <UInput
+            v-model="searchQuery"
+            icon="i-lucide-search"
+            :placeholder="t.searchPh"
+            size="lg"
+            class="w-full max-w-xl"
+          />
+
+          <UTable
+            :data="users"
+            :columns="columns"
+            :loading="loading"
+            class="shrink-0 cursor-pointer"
+            :ui="{
+              base: 'table-fixed border-separate border-spacing-0 min-w-[900px]',
+              thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+              tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:cursor-pointer [&>tr]:hover:bg-elevated/40',
+              th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+              td: 'border-b border-default align-top',
+            }"
+            @select="onTableSelect"
+          />
+
+          <p v-if="!loading && !users.length" class="text-center text-sm text-muted py-8">
+            {{ t.notFound }}
+          </p>
+        </UContainer>
+
+        <CrmUserSlideover
+          v-model:open="slideoverOpen"
+          :user="selectedUser"
+          :meta="meta"
+          :mode="slideoverMode"
+          @saved="onSlideoverSaved"
+          @created="onSlideoverCreated"
         />
-
-        <div class="flex flex-wrap items-center gap-1.5">
-          <CustomersDeleteModal :count="table?.tableApi?.getFilteredSelectedRowModel().rows.length">
-            <UButton
-              v-if="table?.tableApi?.getFilteredSelectedRowModel().rows.length"
-              label="Delete"
-              color="error"
-              variant="subtle"
-              icon="i-lucide-trash"
-            >
-              <template #trailing>
-                <UKbd>
-                  {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length }}
-                </UKbd>
-              </template>
-            </UButton>
-          </CustomersDeleteModal>
-
-          <USelect
-            v-model="statusFilter"
-            :items="[
-              { label: 'All', value: 'all' },
-              { label: 'Subscribed', value: 'subscribed' },
-              { label: 'Unsubscribed', value: 'unsubscribed' },
-              { label: 'Bounced', value: 'bounced' }
-            ]"
-            :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
-            placeholder="Filter status"
-            class="min-w-28"
-          />
-          <UDropdownMenu
-            :items="
-              table?.tableApi
-                ?.getAllColumns()
-                .filter((column: any) => column.getCanHide())
-                .map((column: any) => ({
-                  label: upperFirst(column.id),
-                  type: 'checkbox' as const,
-                  checked: column.getIsVisible(),
-                  onUpdateChecked(checked: boolean) {
-                    table?.tableApi?.getColumn(column.id)?.toggleVisibility(!!checked)
-                  },
-                  onSelect(e?: Event) {
-                    e?.preventDefault()
-                  }
-                }))
-            "
-            :content="{ align: 'end' }"
-          >
-            <UButton
-              label="Display"
-              color="neutral"
-              variant="outline"
-              trailing-icon="i-lucide-settings-2"
-            />
-          </UDropdownMenu>
-        </div>
-      </div>
-
-      <UTable
-        ref="table"
-        v-model:column-filters="columnFilters"
-        v-model:column-visibility="columnVisibility"
-        v-model:row-selection="rowSelection"
-        v-model:pagination="pagination"
-        :pagination-options="{
-          getPaginationRowModel: getPaginationRowModel()
-        }"
-        class="shrink-0"
-        :data="data ?? []"
-        :columns="columns"
-        :loading="isFetching"
-        :ui="{
-          base: 'table-fixed border-separate border-spacing-0',
-          thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0',
-          th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-          td: 'border-b border-default',
-          separator: 'h-0'
-        }"
-      />
-
-      <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
-        <div class="text-sm text-muted">
-          {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} row(s) selected.
-        </div>
-
-        <div class="flex items-center gap-1.5">
-          <UPagination
-            :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-            :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-            :total="table?.tableApi?.getFilteredRowModel().rows.length"
-            @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
-          />
-        </div>
-      </div>
+      </template>
     </template>
   </UDashboardPanel>
 </template>

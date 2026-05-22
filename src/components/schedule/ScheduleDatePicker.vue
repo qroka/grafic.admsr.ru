@@ -4,7 +4,7 @@ import { CalendarDate, type DateValue } from '@internationalized/date'
 import {
   formatScheduleDateString,
   parseScheduleDateString
-} from '../../data/schedule-mock'
+} from '../../utils/schedule'
 
 const model = defineModel<string>({ default: '' })
 

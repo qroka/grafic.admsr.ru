@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScheduleParticipant } from '../../data/schedule-mock'
+import type { ScheduleParticipant } from '../../types/schedule'
 
 defineProps<{
   participant: ScheduleParticipant

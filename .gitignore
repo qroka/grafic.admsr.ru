@@ -10,6 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+server/dist
+data/
+!data/.gitkeep
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.local
 
 # Editor directories and files

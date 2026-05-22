@@ -1,11 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useHead } from '@unhead/vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import {
+  scheduleNavbarAvatar,
+  scheduleNavbarHeading,
+  scheduleTitleOptions,
+} from '../../config/schedule'
+import { useParticipants } from '../../composables/useParticipants'
+import { usePermissions } from '../../composables/usePermissions'
+import { useScheduleApi } from '../../composables/useScheduleApi'
+import type {
+  ScheduleAttachmentFile,
+  ScheduleDateBlock,
+  ScheduleDayEntry,
+  ScheduleParticipant,
+  ScheduleRow,
+  ScheduleSubstituteSlug,
+  ScheduleTitleValue,
+  ScheduleUserGroup,
+} from '../../types/schedule'
+import {
   collectBlockEntriesSortedByTime,
-  collectScheduleParticipants,
   createEmptyScheduleRow,
   filterScheduleBlocks,
   filterScheduleBySubstitute,
@@ -14,23 +31,14 @@ import {
   formatScheduleRowTime,
   isScheduleRowAllDay,
   buildScheduleDayBlockHeading,
-  createScheduleDateBlocks,
   parseDateFromScheduleBlockTitle,
   parseScheduleSlugFromPath,
-  scheduleNavbarAvatar,
-  scheduleNavbarHeading,
   scheduleParticipantKey,
   schedulePathForSlug,
-  scheduleTitleOptions,
-  type ScheduleDateBlock,
-  type ScheduleDayEntry,
-  type ScheduleParticipant,
-  type ScheduleRow,
-  type ScheduleSubstituteSlug,
-  type ScheduleTitleValue,
-  type ScheduleUserGroup
-} from '../../data/schedule-mock'
+} from '../../utils/schedule'
+import ScheduleAttachmentsPopover from './ScheduleAttachmentsPopover.vue'
 import ScheduleEventSlideover from './ScheduleEventSlideover.vue'
+import ScheduleHiddenBadge from './ScheduleHiddenBadge.vue'
 import ScheduleParticipantPopoverChip from './ScheduleParticipantPopoverChip.vue'
 
 /** Карточка на доске: столбец = день (`ScheduleDateBlock`). */
@@ -49,16 +57,33 @@ interface ScheduleBoardColumn {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { loadBlocks, saveEvent, deleteEvent, loading: scheduleLoading, error: scheduleError } = useScheduleApi()
+const { participants: crmParticipants, load: loadParticipants } = useParticipants()
+const { canEditSchedule, canEditSubstituteSlug } = usePermissions()
 
 const view = ref<'list' | 'board'>('list')
 
-const scheduleBlocks = ref<ScheduleDateBlock[]>(createScheduleDateBlocks())
+const scheduleBlocks = ref<ScheduleDateBlock[]>([])
+
+async function refreshSchedule() {
+  scheduleBlocks.value = await loadBlocks()
+}
+
+onMounted(async () => {
+  await Promise.all([refreshSchedule(), loadParticipants()])
+})
 
 const scope = computed<ScheduleTitleValue>(() => parseScheduleSlugFromPath(route.path))
 
 const isScheduleGeneralView = computed(() => scope.value === 'general')
 
-const canCreateEvents = computed(() => !isScheduleGeneralView.value)
+const canCreateEvents = computed(() =>
+  canEditSchedule(substituteSlug.value),
+)
+
+function canEditGroup(group: ScheduleUserGroup): boolean {
+  return !isScheduleGeneralView.value && canEditSubstituteSlug(group.substituteKey)
+}
 
 const substituteSlug = computed(() =>
   isScheduleGeneralView.value ? null : scope.value as ScheduleSubstituteSlug)
@@ -74,8 +99,7 @@ const visibleBlocks = computed(() =>
 const searchQuery = ref('')
 const selectedParticipantKeys = ref<string[]>([])
 
-const scheduleParticipants = computed(() =>
-  collectScheduleParticipants(visibleBlocks.value))
+const scheduleParticipants = computed(() => crmParticipants.value)
 
 const participantSelectItems = computed(() =>
   scheduleParticipants.value.map((p: ScheduleParticipant) => ({
@@ -195,6 +219,7 @@ const eventSelection = ref<{
   block: ScheduleDateBlock
   group: ScheduleUserGroup
   row: ScheduleRow
+  initialAttachments: ScheduleAttachmentFile[]
 } | null>(null)
 
 const createDayBlocks = computed(() => scheduleBlocks.value)
@@ -226,7 +251,12 @@ function syncCreateSelection() {
     row.detail ??= {}
     row.detail.date = blockDate
   }
-  eventSelection.value = { block, group, row }
+  eventSelection.value = {
+    block,
+    group,
+    row,
+    initialAttachments: row.attachmentFiles.map(f => ({ ...f })),
+  }
 }
 
 function onCreateEvent(block?: ScheduleDateBlock) {
@@ -259,7 +289,12 @@ function openEventDetail(
   editable = false
 ) {
   eventSlideoverEditable.value = editable
-  eventSelection.value = { block, group, row }
+  eventSelection.value = {
+    block,
+    group,
+    row,
+    initialAttachments: row.attachmentFiles.map(f => ({ ...f })),
+  }
   eventDetailOpen.value = true
 }
 
@@ -278,44 +313,50 @@ watch(createDayBlockId, () => {
     syncCreateSelection()
 })
 
-function onEventSlideoverSaved() {
-  if (eventSlideoverCreateMode.value) {
-    const s = eventSelection.value
-    if (s && !s.group.rows.includes(s.row))
+async function onEventSlideoverSaved() {
+  const s = eventSelection.value
+  if (!s)
+    return
+
+  const wasCreate = eventSlideoverCreateMode.value
+
+  try {
+    const saved = await saveEvent(
+      s.row,
+      s.group,
+      s.block,
+      wasCreate,
+      s.initialAttachments,
+    )
+    Object.assign(s.row, saved)
+    if (wasCreate && !s.group.rows.includes(s.row))
       s.group.rows.push(s.row)
+
     eventSlideoverCreateMode.value = false
     pendingCreateRow.value = null
     createDayBlockId.value = ''
+
+    await refreshSchedule()
     toast.add({
-      title: 'Мероприятие создано',
-      description: s?.row.topic.trim() || 'Новая запись добавлена в график.',
-      color: 'success'
+      title: wasCreate ? 'Мероприятие создано' : 'Изменения сохранены',
+      description: saved.topic.trim() || 'Запись в графике обновлена.',
+      color: 'success',
     })
-    return
+  } catch (e) {
+    toast.add({
+      title: 'Ошибка сохранения',
+      description: e instanceof Error ? e.message : 'Не удалось сохранить',
+      color: 'error',
+    })
   }
-  toast.add({
-    title: 'Изменения сохранены',
-    description: 'Данные мероприятия обновлены.',
-    color: 'success'
-  })
 }
 
 function onScheduleRowActivate(block: ScheduleDateBlock, group: ScheduleUserGroup, row: ScheduleRow) {
-  if (row.hidden)
-    return
   openEventDetail(block, group, row, false)
 }
 
 function onBoardCardActivate(card: ScheduleBoardCard) {
   onScheduleRowActivate(card.block, card.group, card.row)
-}
-
-function attachmentMenu(row: ScheduleRow): DropdownMenuItem[][] {
-  return [row.attachmentFiles.map(f => ({
-    label: f.name,
-    description: f.size,
-    icon: 'i-lucide-file'
-  }))]
 }
 
 function accentSurfaceClass(accent: ScheduleUserGroup['accent']) {
@@ -350,6 +391,8 @@ function rowContextMenuItems(
   group: ScheduleUserGroup,
   row: ScheduleRow
 ): DropdownMenuItem[][] {
+  if (!canEditGroup(group))
+    return []
   return [[
     {
       label: 'Редактировать',
@@ -370,6 +413,8 @@ function rowContextMenuItems(
 }
 
 function onEditEvent(block: ScheduleDateBlock, group: ScheduleUserGroup, row: ScheduleRow) {
+  if (!canEditGroup(group))
+    return
   openEventDetail(block, group, row, true)
 }
 
@@ -378,38 +423,31 @@ function onRequestDelete(block: ScheduleDateBlock, group: ScheduleUserGroup, row
   deleteModalOpen.value = true
 }
 
-function removeScheduleRow(blockId: string, substituteKey: string, row: ScheduleRow) {
-  const block = scheduleBlocks.value.find(b => b.id === blockId)
-  if (!block)
-    return
-  const group = block.groups.find(g => g.substituteKey === substituteKey && g.rows.includes(row))
-  if (!group)
-    return
-  const idx = group.rows.indexOf(row)
-  if (idx !== -1)
-    group.rows.splice(idx, 1)
-  if (!group.rows.length) {
-    const gi = block.groups.indexOf(group)
-    if (gi !== -1)
-      block.groups.splice(gi, 1)
-  }
-}
-
-function confirmDeleteEvent() {
+async function confirmDeleteEvent() {
   const p = deletePending.value
   if (!p)
     return
-  const { block, group, row } = p
-  if (eventSelection.value?.row === row)
-    eventDetailOpen.value = false
-  removeScheduleRow(block.id, group.substituteKey, row)
-  deleteModalOpen.value = false
-  deletePending.value = null
-  toast.add({
-    title: 'Мероприятие удалено',
-    description: row.topic.length > 100 ? `${row.topic.slice(0, 100)}…` : row.topic,
-    color: 'success'
-  })
+  const { row } = p
+  try {
+    await deleteEvent(row)
+    if (eventSelection.value?.row === row)
+      eventDetailOpen.value = false
+    await refreshSchedule()
+    toast.add({
+      title: 'Мероприятие удалено',
+      description: row.topic.length > 100 ? `${row.topic.slice(0, 100)}…` : row.topic,
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({
+      title: 'Ошибка удаления',
+      description: e instanceof Error ? e.message : 'Не удалось удалить',
+      color: 'error',
+    })
+  } finally {
+    deleteModalOpen.value = false
+    deletePending.value = null
+  }
 }
 
 function cancelDeleteEvent() {
@@ -423,6 +461,20 @@ function cancelDeleteEvent() {
     root: 'flex min-h-0 min-w-0 flex-1 flex-col',
     body: 'flex min-h-0 flex-1 flex-col overflow-hidden px-6 sm:px-6 pt-6 sm:pt-6 pb-0 sm:pb-0'
   }">
+    <div
+      v-if="scheduleLoading"
+      class="mb-3 flex items-center gap-2 text-sm text-muted"
+    >
+      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+      Загрузка графика…
+    </div>
+    <UAlert
+      v-else-if="scheduleError"
+      color="error"
+      variant="subtle"
+      class="mb-3"
+      :title="scheduleError"
+    />
     <template #header>
       <UDashboardNavbar :ui="{ right: 'gap-3' }">
         <template #leading>
@@ -471,7 +523,14 @@ function cancelDeleteEvent() {
         />
       </UContainer>
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div v-if="view === 'board'" class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <p
+          v-if="!scheduleLoading && !filteredBlocks.length"
+          class="text-muted py-12 text-center text-sm"
+        >
+          {{ hasActiveFilters ? 'Нет мероприятий по выбранным фильтрам' : 'Нет мероприятий в графике' }}
+        </p>
+
+        <div v-else-if="view === 'board'" class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div class="flex min-h-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden px-0.5 pb-2">
             <div v-for="col in boardColumns" :key="col.block.id"
               class="border-default flex w-[min(20rem,calc(100vw-3rem))] shrink-0 flex-col overflow-hidden rounded-xl border bg-elevated/40 dark:bg-elevated/15">
@@ -511,14 +570,14 @@ function cancelDeleteEvent() {
                   Нет мероприятий
                 </p>
                 <template v-for="c in col.cards" :key="c.cardKey">
-                  <div v-if="!c.row.hidden" :class="[
+                  <div :class="[
                     'rounded-lg border border-default bg-default p-3 shadow-sm transition-[box-shadow,transform]',
                     accentCardTopBorder(c.group.accent),
                     isScheduleGeneralView && accentSurfaceClass(c.group.accent),
                     'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
                   ]" role="button" tabindex="0" @click="onBoardCardActivate(c)"
                     @keydown.enter.prevent="onBoardCardActivate(c)" @keydown.space.prevent="onBoardCardActivate(c)">
-                    <div class="mb-2 flex items-start gap-2">
+                    <div class="mb-2 flex flex-wrap items-start gap-2">
                       <span class="rounded-md bg-elevated px-1.5 py-0.5 text-xs text-muted tabular-nums">
                         {{ boardCardDisplayId(c.cardKey) }}
                       </span>
@@ -526,10 +585,13 @@ function cancelDeleteEvent() {
                         class="text-xs text-dimmed"
                         :class="{ 'tabular-nums': !isScheduleRowAllDay(c.row) }"
                       >{{ formatScheduleRowTime(c.row) }}</span>
+                      <ScheduleHiddenBadge v-if="c.row.hidden" />
                       <div class="ms-auto shrink-0" @click.stop>
-                        <UDropdownMenu v-if="!isScheduleGeneralView"
+                        <UDropdownMenu
+                          v-if="rowContextMenuItems(c.block, c.group, c.row).length"
                           :items="rowContextMenuItems(c.block, c.group, c.row)"
-                          :content="{ align: 'end', collisionPadding: 12 }">
+                          :content="{ align: 'end', collisionPadding: 12 }"
+                        >
                           <UButton color="neutral" variant="ghost" square size="xs" icon="i-lucide-ellipsis"
                             aria-label="Действия с мероприятием" />
                         </UDropdownMenu>
@@ -563,41 +625,6 @@ function cancelDeleteEvent() {
                       <UIcon v-if="c.row.attachmentFiles.length" name="i-lucide-paperclip"
                         class="size-4 shrink-0 text-dimmed" :title="c.row.attachmentsLabel" />
                     </div>
-                  </div>
-
-                  <div v-else :class="[
-                    'rounded-lg border border-default bg-default p-3 shadow-sm',
-                    accentCardTopBorder(c.group.accent),
-                    isScheduleGeneralView && accentSurfaceClass(c.group.accent)
-                  ]">
-                    <div class="mb-2 flex items-center gap-2">
-                      <UIcon name="i-lucide-eye-off" class="size-4 shrink-0 text-dimmed" aria-hidden="true" />
-                      <span
-                        class="text-xs text-dimmed"
-                        :class="{ 'tabular-nums': !isScheduleRowAllDay(c.row) }"
-                      >{{ formatScheduleRowTime(c.row) }}</span>
-                      <span class="text-xs text-dimmed">Скрытое</span>
-                      <div class="ms-auto shrink-0" @click.stop>
-                        <UDropdownMenu v-if="!isScheduleGeneralView"
-                          :items="rowContextMenuItems(c.block, c.group, c.row)"
-                          :content="{ align: 'end', collisionPadding: 12 }">
-                          <UButton color="neutral" variant="ghost" square size="xs" icon="i-lucide-ellipsis"
-                            aria-label="Действия с мероприятием" />
-                        </UDropdownMenu>
-                      </div>
-                    </div>
-
-                    <div v-if="isScheduleGeneralView" class="mb-2 flex min-w-0 items-center gap-2">
-                      <UAvatar :src="c.group.avatarSrc" size="xs" class="shrink-0" />
-                      <span class="truncate text-xs font-medium text-default">{{ c.group.name }}</span>
-                    </div>
-
-                    <p class="pointer-events-none select-none text-sm text-muted blur-xs">
-                      {{ c.row.topic }}
-                    </p>
-                    <p class="mt-2 text-xs text-dimmed">
-                      Просмотр недоступен
-                    </p>
                   </div>
                 </template>
               </div>
@@ -650,16 +677,12 @@ function cancelDeleteEvent() {
               </template>
 
               <template #content>
-                <div v-if="!dayEntries(block).length" class="text-muted px-4 py-3 text-sm border-b border-default">
-                  Нет событий
-                </div>
-
                 <div class="border-b border-default">
                   <template
                     v-for="(entry, ei) in dayEntries(block)"
                     :key="dayEntryKey(block.id, entry, ei)"
                   >
-                    <div v-if="!entry.row.hidden" :class="[
+                    <div :class="[
                       'grid cursor-pointer border-b border-default transition-colors hover:bg-elevated/40',
                       isScheduleGeneralView && accentSurfaceClass(entry.group.accent)
                     ]" :style="{ gridTemplateColumns: scheduleGridTemplate }" role="button" tabindex="0"
@@ -667,8 +690,9 @@ function cancelDeleteEvent() {
                       @keydown.enter.prevent="onScheduleRowActivate(block, entry.group, entry.row)"
                       @keydown.space.prevent="onScheduleRowActivate(block, entry.group, entry.row)">
                       <div
-                        class="flex min-h-[100px] flex-col justify-center border-r border-default p-4 text-sm text-default">
-                        {{ formatScheduleRowTime(entry.row) }}
+                        class="flex min-h-[100px] flex-col justify-center gap-1.5 border-r border-default p-4 text-sm text-default">
+                        <span>{{ formatScheduleRowTime(entry.row) }}</span>
+                        <ScheduleHiddenBadge v-if="entry.row.hidden" />
                       </div>
                       <div
                         v-if="isScheduleGeneralView"
@@ -694,51 +718,19 @@ function cancelDeleteEvent() {
                       </div>
                       <div class="flex min-h-[100px] min-w-0 items-center justify-end border-r border-default p-4"
                         @click.stop>
-                        <UDropdownMenu :items="attachmentMenu(entry.row)" :content="{ align: 'end', collisionPadding: 12 }">
-                          <UButton color="neutral" variant="outline" size="md">
-                            {{ entry.row.attachmentsLabel }}
-                            <UIcon name="i-lucide-chevron-down" class="size-4" />
-                          </UButton>
-                        </UDropdownMenu>
+                        <ScheduleAttachmentsPopover
+                          v-if="entry.row.attachmentFiles.length"
+                          :files="entry.row.attachmentFiles"
+                          :label="entry.row.attachmentsLabel"
+                        />
                       </div>
                       <div v-if="!isScheduleGeneralView"
                         class="flex min-h-[100px] items-center justify-center border-default p-1" @click.stop>
-                        <UDropdownMenu :items="rowContextMenuItems(block, entry.group, entry.row)"
-                          :content="{ align: 'end', collisionPadding: 12 }">
-                          <UButton color="neutral" variant="ghost" square size="sm" icon="i-lucide-ellipsis-vertical"
-                            aria-label="Действия с мероприятием" />
-                        </UDropdownMenu>
-                      </div>
-                    </div>
-
-                    <div v-else :class="[
-                      'grid border-b border-default',
-                      isScheduleGeneralView
-                        ? accentSurfaceClass(entry.group.accent)
-                        : 'bg-elevated/25'
-                    ]" :style="{ gridTemplateColumns: scheduleGridTemplate }">
-                      <div
-                        class="flex min-h-[100px] flex-col justify-center border-r border-default p-4 text-sm text-default select-none">
-                        {{ formatScheduleRowTime(entry.row) }}
-                      </div>
-                      <div
-                        v-if="isScheduleGeneralView"
-                        class="flex min-h-[100px] items-center gap-2 border-r border-default p-4 select-none"
-                      >
-                        <UAvatar :src="entry.group.avatarSrc" size="sm" class="shrink-0" />
-                        <span class="min-w-0 text-sm font-medium leading-snug text-default">{{ entry.group.name }}</span>
-                      </div>
-                      <div
-                        class="flex min-h-[100px] flex-wrap items-center gap-2 border-r border-default px-4 py-2 text-sm text-muted select-none"
-                        :style="isScheduleGeneralView ? { gridColumn: '3 / -1' } : { gridColumn: '2 / 6' }">
-                        <UIcon name="i-lucide-eye-off" class="size-4 shrink-0 text-dimmed" aria-hidden="true" />
-                        <span class="shrink-0 text-sm text-dimmed">Просмотр недоступен</span>
-                      </div>
-                      <div v-if="!isScheduleGeneralView"
-                        class="flex min-h-[100px] items-center justify-center border-default p-1"
-                        style="grid-column: 6 / 7" @click.stop>
-                        <UDropdownMenu :items="rowContextMenuItems(block, entry.group, entry.row)"
-                          :content="{ align: 'end', collisionPadding: 12 }">
+                        <UDropdownMenu
+                          v-if="rowContextMenuItems(block, entry.group, entry.row).length"
+                          :items="rowContextMenuItems(block, entry.group, entry.row)"
+                          :content="{ align: 'end', collisionPadding: 12 }"
+                        >
                           <UButton color="neutral" variant="ghost" square size="sm" icon="i-lucide-ellipsis-vertical"
                             aria-label="Действия с мероприятием" />
                         </UDropdownMenu>

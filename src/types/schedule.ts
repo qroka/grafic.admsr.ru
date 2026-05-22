@@ -1,0 +1,84 @@
+export type ScheduleAccent = 'rose' | 'blue' | 'amber' | 'violet' | 'emerald'
+
+export interface ScheduleAttachmentFile {
+  id?: number
+  name: string
+  size: string
+  /** Локальный файл до загрузки на сервер. */
+  pendingFile?: File
+}
+
+export interface ScheduleParticipant {
+  externalId?: number
+  name: string
+  avatarSrc: string
+  card: {
+    line1: string
+    line2: string
+    email: string
+    phone: string
+    address: string
+  }
+}
+
+export interface ScheduleRowDetail {
+  date?: string
+  timeField?: string
+  sorting?: string
+  completed?: boolean
+  allDay?: boolean
+  createdAt?: string
+  headerDateTime?: string
+  organizer?: ScheduleParticipant
+}
+
+export interface ScheduleRow {
+  apiId?: number
+  time: string
+  placeLabel: string
+  placeAddress: string
+  topic: string
+  participants: ScheduleParticipant[]
+  attachmentsLabel: string
+  attachmentFiles: ScheduleAttachmentFile[]
+  hidden?: boolean
+  detail?: ScheduleRowDetail
+}
+
+export const scheduleSubstituteSlugs = [
+  'marcenkovskiy',
+  'markova',
+  'sidorov',
+  'zhuravskaya',
+  'nigmatullin',
+] as const
+
+export type ScheduleSubstituteSlug = (typeof scheduleSubstituteSlugs)[number]
+
+export type ScheduleTitleValue = 'general' | ScheduleSubstituteSlug
+
+export interface ScheduleUserGroup {
+  name: string
+  avatarSrc: string
+  accent: ScheduleAccent
+  substituteKey: ScheduleSubstituteSlug
+  rows: ScheduleRow[]
+}
+
+export interface ScheduleDateBlock {
+  id: string
+  title: string
+  defaultOpen: boolean
+  groups: ScheduleUserGroup[]
+}
+
+export interface ScheduleDayEntry {
+  group: ScheduleUserGroup
+  row: ScheduleRow
+}
+
+export interface ScheduleDayBlockTitleParts {
+  relativeDay: string
+  date: string
+  weekday: string
+}

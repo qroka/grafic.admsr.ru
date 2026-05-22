@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CalendarDate } from '@internationalized/date'
 import { computed, reactive, ref, watch } from 'vue'
+import type { FormError, FormSubmitEvent } from '@nuxt/ui'
 import {
   findScheduleBlockIdByDate,
   formatAttachmentsLabel,
@@ -8,21 +9,33 @@ import {
   formatSchedulePlace,
   ensureScheduleRowDetailMeta,
   getScheduleRowCreatedAt,
+  downloadScheduleFile,
   previewScheduleFile,
-  scheduleAttachmentsFromFiles,
   scheduleFileDisplaySize,
-  scheduleFilesFromAttachments,
   parseDateFromScheduleBlockTitle,
   parseScheduleDateString,
   scheduleParticipantKey,
-  type ScheduleDateBlock,
-  type ScheduleParticipant,
-  type ScheduleRow,
-  type ScheduleUserGroup
-} from '../../data/schedule-mock'
+} from '../../utils/schedule'
+import type {
+  ScheduleAttachmentFile,
+  ScheduleDateBlock,
+  ScheduleParticipant,
+  ScheduleRow,
+  ScheduleUserGroup,
+} from '../../types/schedule'
+import {
+  downloadEventAttachment,
+  previewEventAttachment,
+} from '../../api/attachments'
+import { figmaScheduleAssets } from '../../config/figma-mcp-assets'
+import { UPLOAD_MAX_SIZE_LABEL, validateUploadFile } from '../../config/uploads'
+import { useAuth } from '../../composables/useAuth'
 import ScheduleAttachmentList from './ScheduleAttachmentList.vue'
 import ScheduleDatePicker from './ScheduleDatePicker.vue'
 import ScheduleParticipantPopoverChip from './ScheduleParticipantPopoverChip.vue'
+import ScheduleParticipantsField from './ScheduleParticipantsField.vue'
+import ScheduleTimePicker from './ScheduleTimePicker.vue'
+import ScheduleHiddenBadge from './ScheduleHiddenBadge.vue'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -44,7 +57,7 @@ const props = defineProps<{
 
 const createDayBlockId = defineModel<string>('createDayBlockId')
 
-const toast = useToast()
+const { user: authUser } = useAuth()
 
 const emit = defineEmits<{
   saved: []
@@ -61,14 +74,52 @@ const draft = reactive({
   allDay: false,
   hidden: false,
   address: '',
-  topic: ''
+  topic: '',
 })
 
 const selectedParticipantKeys = ref<string[]>([])
-const attachmentFiles = ref<File[]>([])
+const attachmentItems = ref<ScheduleAttachmentFile[]>([])
+
+const EVENT_FORM_ID = 'schedule-event-form'
+const toast = useToast()
 
 function removeAttachmentAt(index: number) {
-  attachmentFiles.value = attachmentFiles.value.filter((_, i) => i !== index)
+  attachmentItems.value = attachmentItems.value.filter((_, i) => i !== index)
+}
+
+function addPendingFiles(files: File[] | null | undefined) {
+  if (!files?.length)
+    return
+  for (const file of files) {
+    const validationError = validateUploadFile(file)
+    if (validationError) {
+      toast.add({
+        title: 'Файл не добавлен',
+        description: validationError,
+        color: 'error',
+      })
+      continue
+    }
+    attachmentItems.value.push({
+      name: file.name,
+      size: scheduleFileDisplaySize(file),
+      pendingFile: file,
+    })
+  }
+}
+
+async function previewAttachment(item: ScheduleAttachmentFile) {
+  if (item.id)
+    await previewEventAttachment(item.id)
+  else if (item.pendingFile)
+    previewScheduleFile(item.pendingFile)
+}
+
+async function downloadAttachment(item: ScheduleAttachmentFile) {
+  if (item.id)
+    await downloadEventAttachment(item.id, item.name)
+  else if (item.pendingFile)
+    downloadScheduleFile(item.pendingFile)
 }
 
 const participantsByKey = computed(() => {
@@ -78,24 +129,11 @@ const participantsByKey = computed(() => {
   return map
 })
 
-const participantSelectItems = computed(() =>
-  (props.availableParticipants ?? []).map(participant => ({
-    label: participant.name,
-    value: scheduleParticipantKey(participant),
-    avatar: { src: participant.avatarSrc, alt: participant.name }
-  }))
-)
-
 const selectedParticipants = computed(() =>
   selectedParticipantKeys.value
     .map(key => participantsByKey.value.get(key))
-    .filter((p): p is ScheduleParticipant => Boolean(p))
+    .filter((p): p is ScheduleParticipant => Boolean(p)),
 )
-
-function removeParticipant(participant: ScheduleParticipant) {
-  const key = scheduleParticipantKey(participant)
-  selectedParticipantKeys.value = selectedParticipantKeys.value.filter(k => k !== key)
-}
 
 function syncDraftFromSelection() {
   const s = props.selection
@@ -113,7 +151,7 @@ function syncDraftFromSelection() {
   draft.allDay = r.detail?.allDay ?? false
   draft.hidden = r.hidden ?? false
   selectedParticipantKeys.value = r.participants.map(scheduleParticipantKey)
-  attachmentFiles.value = scheduleFilesFromAttachments(r.attachmentFiles)
+  attachmentItems.value = r.attachmentFiles.map(f => ({ ...f }))
 }
 
 watch(
@@ -122,13 +160,13 @@ watch(
     if (s)
       syncDraftFromSelection()
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const createAvailableDates = computed(() =>
   (props.createDayBlocks ?? [])
     .map(b => parseDateFromScheduleBlockTitle(b.title))
-    .filter((d): d is string => Boolean(d))
+    .filter((d): d is string => Boolean(d)),
 )
 
 const createCalendarRange = computed((): {
@@ -151,7 +189,7 @@ watch(
   (allDay) => {
     if (allDay)
       draft.time = ''
-  }
+  },
 )
 
 watch(
@@ -162,25 +200,51 @@ watch(
     const blockId = findScheduleBlockIdByDate(props.createDayBlocks, dateStr)
     if (blockId && createDayBlockId.value !== blockId)
       createDayBlockId.value = blockId
-  }
+  },
 )
 
 /** Дата создания записи (не дата проведения мероприятия). */
 const headerCreatedAt = computed(() => {
   if (isCreate.value)
-    return formatScheduleCreatedAtNow(draft.allDay)
+    return formatScheduleCreatedAtNow()
   const s = props.selection
   if (!s)
     return ''
   return getScheduleRowCreatedAt(s.row)
 })
-const organizerParticipant = computed((): ScheduleParticipant | null => {
-  if (!props.selection)
-    return null
+
+const headerCreatorParticipant = computed((): ScheduleParticipant | null => {
   if (d.value?.organizer)
     return d.value.organizer
-  return props.selection.row.participants[0] ?? null
+  if (isCreate.value && authUser.value?.name?.trim()) {
+    const name = authUser.value.name.trim()
+    return {
+      name,
+      avatarSrc: figmaScheduleAssets.avatar,
+      card: {
+        line1: name,
+        line2: '',
+        email: authUser.value.email ?? '',
+        phone: '',
+        address: '',
+      },
+    }
+  }
+  return null
 })
+
+function validateEventForm(state: typeof draft): FormError[] {
+  const errors: FormError[] = []
+  if (!state.date.trim())
+    errors.push({ name: 'date', message: 'Укажите дату' })
+  if (!state.allDay && !/^\d{1,2}:\d{2}$/.test(state.time.trim()))
+    errors.push({ name: 'time', message: 'Укажите время' })
+  if (!state.address.trim())
+    errors.push({ name: 'address', message: 'Укажите адрес проведения' })
+  if (!state.topic.trim())
+    errors.push({ name: 'topic', message: 'Укажите тему мероприятия' })
+  return errors
+}
 
 function applyDraftToRow() {
   const s = props.selection
@@ -196,26 +260,19 @@ function applyDraftToRow() {
     r.detail = {}
   r.detail.date = draft.date
   r.detail.allDay = draft.allDay
-  if (!r.detail.createdAt) {
+  if (!r.apiId && !r.detail.createdAt && !isCreate.value) {
     const eventDate = draft.date || parseDateFromScheduleBlockTitle(s.block.title) || ''
-    if (isCreate.value)
-      r.detail.createdAt = formatScheduleCreatedAtNow(draft.allDay)
-    else
-      ensureScheduleRowDetailMeta(r, eventDate)
+    ensureScheduleRowDetailMeta(r, eventDate)
+  }
+  if (isCreate.value && selectedParticipants.value[0]?.externalId != null) {
+    r.detail.organizer = selectedParticipants.value[0]
   }
   r.hidden = draft.hidden
-  r.attachmentFiles = scheduleAttachmentsFromFiles(attachmentFiles.value)
+  r.attachmentFiles = attachmentItems.value.map(item => ({ ...item }))
   r.attachmentsLabel = formatAttachmentsLabel(r.attachmentFiles.length)
 }
 
-function onSave() {
-  if (!draft.topic.trim()) {
-    toast.add({
-      title: 'Укажите тему мероприятия',
-      color: 'warning'
-    })
-    return
-  }
+function onFormSubmit(_event: FormSubmitEvent<typeof draft>) {
   applyDraftToRow()
   emit('saved')
   open.value = false
@@ -250,13 +307,19 @@ function onCancelEdit() {
                   : 'Мероприятие'
             }}
           </p>
-          <div class="flex flex-wrap items-center gap-2 text-sm text-muted">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+            <ScheduleHiddenBadge v-if="selection.row.hidden" />
             <span v-if="headerCreatedAt">{{ headerCreatedAt }}</span>
+            <span
+              v-if="headerCreatedAt && headerCreatorParticipant"
+              class="text-dimmed"
+              aria-hidden="true"
+            >·</span>
             <ScheduleParticipantPopoverChip
-              v-if="organizerParticipant && !isCreate"
+              v-if="headerCreatorParticipant"
               variant="header"
               is-creator
-              :participant="organizerParticipant"
+              :participant="headerCreatorParticipant"
             />
           </div>
         </div>
@@ -273,9 +336,21 @@ function onCancelEdit() {
     </template>
 
     <template v-if="selection" #body>
-      <div class="flex flex-col gap-3">
+      <UForm
+        :id="EVENT_FORM_ID"
+        :state="draft"
+        :validate="validateEventForm"
+        class="flex flex-col gap-3"
+        @submit="onFormSubmit"
+      >
+        <USwitch
+          v-model="draft.hidden"
+          :disabled="!editable"
+          label="Скрыть мероприятие"
+        />
+
         <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
-          <UFormField :label="isCreate ? 'День' : 'Дата'" class="w-full shrink-0 sm:w-64">
+          <UFormField :label="isCreate ? 'День' : 'Дата'" name="date" class="w-full shrink-0 sm:w-64">
             <ScheduleDatePicker
               v-model="draft.date"
               :disabled="!editable"
@@ -284,43 +359,37 @@ function onCancelEdit() {
               :max-value="isCreate ? createCalendarRange.max : undefined"
             />
           </UFormField>
-          <UFormField v-if="!draft.allDay" label="Время" class="min-w-0 flex-1">
-            <UInput
+          <UFormField v-if="!draft.allDay" label="Время" name="time" class="min-w-0 flex-1">
+            <ScheduleTimePicker
               v-model="draft.time"
               :disabled="!editable"
-              variant="outline"
-              class="w-full"
+              placeholder="09:00"
             />
           </UFormField>
         </div>
 
-        <div class="flex flex-col gap-3">
-          <USwitch
-            v-model="draft.allDay"
-            :disabled="!editable"
-            label="Весь день"
-          />
-          <USwitch
-            v-model="draft.hidden"
-            :disabled="!editable"
-            label="Скрыть"
-          />
-        </div>
+        <USwitch
+          v-model="draft.allDay"
+          :disabled="!editable"
+          label="Весь день"
+        />
 
-        <UFormField label="Адрес">
+        <UFormField label="Адрес" name="address">
           <UInput
             v-model="draft.address"
             :disabled="!editable"
             variant="outline"
+            placeholder="Укажите адрес проведения"
             class="w-full"
           />
         </UFormField>
 
-        <UFormField label="Тема">
+        <UFormField label="Тема" name="topic">
           <UTextarea
             v-model="draft.topic"
             :disabled="!editable"
             variant="outline"
+            placeholder="Кратко опишите тему мероприятия"
             :rows="4"
             autoresize
             class="w-full"
@@ -328,37 +397,11 @@ function onCancelEdit() {
         </UFormField>
 
         <UFormField label="Участники">
-          <USelectMenu
-            v-if="editable"
+          <ScheduleParticipantsField
             v-model="selectedParticipantKeys"
-            :items="participantSelectItems"
-            value-key="value"
-            multiple
-            placeholder="Выберите участников"
-            icon="i-lucide-users"
-            :search-input="{ placeholder: 'Найти участника…' }"
-            class="w-full"
-            :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+            :available-participants="availableParticipants ?? []"
+            :disabled="!editable"
           />
-          <div
-            class="flex w-full flex-wrap gap-2 rounded-md border border-default px-3 py-2"
-            :class="{ 'mt-2': editable }"
-          >
-            <ScheduleParticipantPopoverChip
-              v-for="participant in editable ? selectedParticipants : selection.row.participants"
-              :key="scheduleParticipantKey(participant)"
-              variant="field"
-              :participant="participant"
-              :removable="editable"
-              @remove="removeParticipant(participant)"
-            />
-            <span
-              v-if="(editable ? selectedParticipants : selection.row.participants).length === 0"
-              class="text-sm text-muted"
-            >
-              Участников пока нет
-            </span>
-          </div>
         </UFormField>
 
         <UFormField label="Приложения">
@@ -366,74 +409,84 @@ function onCancelEdit() {
             v-if="!editable"
             :files="selection.row.attachmentFiles"
           />
-          <UFileUpload
-            v-else
-            v-model="attachmentFiles"
-            multiple
-            layout="list"
-            position="outside"
-            :interactive="false"
-            :file-delete="false"
-            :file-image="false"
-            icon="i-lucide-paperclip"
-            label="Перетащите файлы сюда"
-            description="Документы любого формата"
-            class="w-full min-h-32"
-          >
-            <template #actions="{ open: openFileDialog }">
-              <UButton
-                label="Выбрать файлы"
-                icon="i-lucide-upload"
-                color="neutral"
-                variant="outline"
-                @click="openFileDialog()"
-              />
-            </template>
-
-            <template #file-size="{ file }">
-              {{ scheduleFileDisplaySize(file) }}
-            </template>
-
-            <template #file-trailing="{ file, index }">
-              <div class="flex items-center gap-0.5">
+          <div v-else class="flex flex-col gap-3">
+            <ul v-if="attachmentItems.length" class="flex flex-col gap-2">
+              <li
+                v-for="(item, index) in attachmentItems"
+                :key="item.id ?? `pending-${item.name}-${index}`"
+                class="flex items-center gap-2 rounded-md border border-default px-2.5 py-2"
+              >
+                <div class="flex shrink-0 items-center rounded-full bg-elevated p-2">
+                  <UIcon name="i-lucide-file" class="size-4 text-muted" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-default">
+                    {{ item.name }}
+                  </p>
+                  <p class="text-xs text-muted">
+                    {{ item.size }}{{ item.pendingFile ? ' · будет загружен' : '' }}
+                  </p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    square
+                    size="sm"
+                    icon="i-lucide-eye"
+                    aria-label="Просмотреть"
+                    @click="previewAttachment(item)"
+                  />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    square
+                    size="sm"
+                    icon="i-lucide-download"
+                    aria-label="Скачать"
+                    @click="downloadAttachment(item)"
+                  />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    square
+                    size="sm"
+                    icon="i-lucide-x"
+                    aria-label="Удалить"
+                    @click="removeAttachmentAt(index)"
+                  />
+                </div>
+              </li>
+            </ul>
+            <UFileUpload
+              :model-value="[]"
+              multiple
+              layout="list"
+              position="outside"
+              :interactive="false"
+              icon="i-lucide-paperclip"
+              label="Добавить файлы"
+              :description="`До ${UPLOAD_MAX_SIZE_LABEL} на файл`"
+              class="w-full min-h-24"
+              @update:model-value="addPendingFiles"
+            >
+              <template #actions="{ open: openFileDialog }">
                 <UButton
+                  label="Выбрать файлы"
+                  icon="i-lucide-upload"
                   color="neutral"
-                  variant="link"
-                  size="xs"
-                  icon="i-lucide-eye"
-                  class="px-1"
-                  aria-label="Просмотреть файл"
-                  @click.stop.prevent="previewScheduleFile(file)"
+                  variant="outline"
+                  @click="openFileDialog()"
                 />
-                <UButton
-                  color="neutral"
-                  variant="link"
-                  size="xs"
-                  icon="i-lucide-x"
-                  class="px-1"
-                  aria-label="Удалить файл"
-                  @click.stop.prevent="removeAttachmentAt(index)"
-                />
-              </div>
-            </template>
-
-            <template #files-bottom="{ removeFile, files }">
-              <UButton
-                v-if="files?.length"
-                label="Удалить все файлы"
-                color="neutral"
-                variant="outline"
-                class="mt-2 w-full justify-center"
-                @click="removeFile()"
-              />
-            </template>
-          </UFileUpload>
+              </template>
+            </UFileUpload>
+          </div>
         </UFormField>
-      </div>
+      </UForm>
     </template>
 
     <template v-if="selection && (editable || isCreate)" #footer>
-      <div class="flex w-full gap-2 ">
+      <div class="flex w-full gap-2">
         <UButton
           label="Отмена"
           color="neutral"
@@ -447,7 +500,8 @@ function onCancelEdit() {
           color="primary"
           class="w-full justify-center"
           size="lg"
-          @click="onSave"
+          type="submit"
+          :form="EVENT_FORM_ID"
         />
       </div>
     </template>

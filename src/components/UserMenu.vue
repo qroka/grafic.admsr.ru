@@ -1,25 +1,29 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { useColorMode } from '@vueuse/core'
+import { useAuth } from '../composables/useAuth'
 
 defineProps<{
   collapsed?: boolean
 }>()
 
+const router = useRouter()
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
+const { user, logout } = useAuth()
 
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
 
-const user = ref({
-  name: 'Администратор',
+const menuUser = computed(() => ({
+  name: user.value?.name ?? 'Пользователь',
   avatar: {
-    src: 'https://github.com/benjamincanac.png',
-    alt: 'Администратор'
-  }
-})
+    src: undefined as string | undefined,
+    alt: user.value?.name ?? 'Пользователь',
+  },
+}))
 
 const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: 'Цвета',
@@ -94,8 +98,13 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   }]
 }], [{
   label: 'Выход',
-  icon: 'i-lucide-log-out'
-}]]))</script>
+  icon: 'i-lucide-log-out',
+  onSelect() {
+    logout()
+    void router.push('/login')
+  },
+}]]))
+</script>
 
 <template>
   <UDropdownMenu
@@ -105,8 +114,8 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   >
     <UButton
       v-bind="{
-        ...user,
-        label: collapsed ? undefined : user?.name,
+        ...menuUser,
+        label: collapsed ? undefined : menuUser.name,
         trailingIcon: collapsed ? undefined : 'i-lucide-chevrons-up-down'
       }"
       color="neutral"

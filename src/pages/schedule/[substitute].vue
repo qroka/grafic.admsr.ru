@@ -2,7 +2,7 @@
 import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SubstitutesScheduleView from '../../components/schedule/SubstitutesScheduleView.vue'
-import { isScheduleSubstituteSlug } from '../../data/schedule-mock'
+import { isScheduleSubstituteSlug } from '../../config/schedule'
 
 const route = useRoute()
 const router = useRouter()

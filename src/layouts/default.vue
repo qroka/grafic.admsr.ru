@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import type { NavigationMenuItem } from '@nuxt/ui'
-import { schedulePathForSlug, scheduleTitleOptions } from '../data/schedule-mock'
-
-const toast = useToast()
+import { scheduleTitleOptions } from '../config/schedule'
+import { useAuth } from '../composables/useAuth'
+import { schedulePathForSlug } from '../utils/schedule'
 
 const open = ref(false)
+const { canViewLogs } = useAuth()
 
 const scheduleNavChildren = scheduleTitleOptions.map(opt => ({
   label: opt.label,
@@ -16,46 +16,56 @@ const scheduleNavChildren = scheduleTitleOptions.map(opt => ({
   avatar: 'avatar' in opt ? opt.avatar : undefined,
   onSelect: () => {
     open.value = false
-  }
+  },
 })) satisfies NavigationMenuItem[]
 
-const links = [[{
-  slot: 'schedule-nav',
-  label: 'График заместителей',
-  icon: 'i-lucide-calendar-range',
-  to: '/schedule',
-  defaultOpen: true,
-  type: 'trigger',
-  children: scheduleNavChildren
-}], [{
-  label: 'Обратная связь',
-  icon: 'i-lucide-message-circle',
-  to: 'https://forms.yandex.ru/u/6a05984a902902136ca191e3',
-  target: '_blank',
-  onSelect: () => {
-    open.value = false
-  }
-}]] satisfies NavigationMenuItem[][]
+const links = computed(() => {
+  const scheduleGroup: NavigationMenuItem[] = [{
+    slot: 'schedule-nav',
+    label: 'График заместителей',
+    icon: 'i-lucide-calendar-range',
+    to: '/schedule',
+    defaultOpen: true,
+    type: 'trigger',
+    children: scheduleNavChildren,
+  }]
 
-const cookie = useStorage('cookie-consent', 'pending')
-if (cookie.value !== 'accepted') {
-  toast.add({
-    title: 'We use first-party cookies to enhance your experience on our website.',
-    duration: 0,
-    close: false,
-    actions: [{
-      label: 'Accept',
-      color: 'neutral',
-      variant: 'outline',
-      onClick: () => {
-        cookie.value = 'accepted'
-      }
-    }, {
-      label: 'Opt out',
-      color: 'neutral',
-      variant: 'ghost'
-    }]
+  const bottom: NavigationMenuItem[] = []
+
+  if (canViewLogs.value) {
+    bottom.push({
+      label: 'Пользователи',
+      icon: 'i-lucide-users',
+      to: '/customers',
+      onSelect: () => {
+        open.value = false
+      },
+    })
+    bottom.push({
+      label: 'Журнал',
+      icon: 'i-lucide-scroll-text',
+      to: '/logs',
+      onSelect: () => {
+        open.value = false
+      },
+    })
+  }
+
+  bottom.push({
+    label: 'Обратная связь',
+    icon: 'i-lucide-message-circle',
+    to: 'https://forms.yandex.ru/u/6a05984a902902136ca191e3',
+    target: '_blank',
+    onSelect: () => {
+      open.value = false
+    },
   })
+
+  return [scheduleGroup, bottom] satisfies NavigationMenuItem[][]
+})
+
+function scheduleNavItem(item: unknown): NavigationMenuItem {
+  return item as NavigationMenuItem
 }
 </script>
 
@@ -76,7 +86,7 @@ if (cookie.value !== 'accepted') {
       <template #default="{ collapsed }">
         <UNavigationMenu
           :collapsed="collapsed"
-          :items="links[0]"
+          :items="(links[0] as NavigationMenuItem[])"
           orientation="vertical"
           tooltip
           :popover="{ content: { side: 'right', align: 'start', alignOffset: 2 } }"
@@ -84,10 +94,10 @@ if (cookie.value !== 'accepted') {
           <template #schedule-nav-content="{ item, ui }">
             <ul data-slot="childList" :class="ui.childList()">
               <li data-slot="childLabel" :class="ui.childLabel()">
-                {{ item.label }}
+                {{ scheduleNavItem(item).label }}
               </li>
               <li
-                v-for="(childItem, childIndex) in item.children || []"
+                v-for="(childItem, childIndex) in scheduleNavItem(item).children || []"
                 :key="childIndex"
                 data-slot="childItem"
                 :class="ui.childItem()"
@@ -103,7 +113,7 @@ if (cookie.value !== 'accepted') {
                     :href="href"
                     data-slot="childLink"
                     :class="ui.childLink({
-                      active: childItem.exact ? isExactActive : isActive
+                      active: childItem.exact ? isExactActive : isActive,
                     })"
                     @click="(e) => {
                       navigate(e)
@@ -116,7 +126,7 @@ if (cookie.value !== 'accepted') {
                       size="2xs"
                       data-slot="linkLeadingAvatar"
                       :class="ui.linkLeadingAvatar({
-                        active: childItem.exact ? isExactActive : isActive
+                        active: childItem.exact ? isExactActive : isActive,
                       })"
                     />
                     <UIcon
@@ -124,13 +134,13 @@ if (cookie.value !== 'accepted') {
                       :name="childItem.icon"
                       data-slot="childLinkIcon"
                       :class="ui.childLinkIcon({
-                        active: childItem.exact ? isExactActive : isActive
+                        active: childItem.exact ? isExactActive : isActive,
                       })"
                     />
                     <span
                       data-slot="childLinkLabel"
                       :class="ui.childLinkLabel({
-                        active: childItem.exact ? isExactActive : isActive
+                        active: childItem.exact ? isExactActive : isActive,
                       })"
                     >
                       {{ childItem.label }}
@@ -145,7 +155,7 @@ if (cookie.value !== 'accepted') {
         <UNavigationMenu
           v-if="links[1].length"
           :collapsed="collapsed"
-          :items="links[1]"
+          :items="(links[1] as NavigationMenuItem[])"
           orientation="vertical"
           tooltip
           class="mt-auto"
@@ -158,7 +168,5 @@ if (cookie.value !== 'accepted') {
     </UDashboardSidebar>
 
     <RouterView />
-
-    <NotificationsSlideover />
   </UDashboardGroup>
 </template>

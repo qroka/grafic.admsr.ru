@@ -33,5 +33,14 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Build server
+        run: pnpm run build:server
+
+      - name: Lint server
+        run: pnpm run lint:server
+
       - name: Typecheck
         run: pnpm run typecheck
+
+      - name: Server smoke test
+        run: pnpm run smoke:server

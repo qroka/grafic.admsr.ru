@@ -1,1 +1,11 @@
 /// <reference types="vite/client" />
+
+import 'vue-router'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAdmin?: boolean
+    layout?: string
+    public?: boolean
+  }
+}

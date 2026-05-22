@@ -2,19 +2,37 @@
 import {
   downloadScheduleAttachment,
   previewScheduleAttachment,
-  type ScheduleRow
-} from '../../data/schedule-mock'
+} from '../../utils/schedule'
+import {
+  downloadEventAttachment,
+  previewEventAttachment,
+} from '../../api/attachments'
+import type { ScheduleAttachmentFile } from '../../types/schedule'
 
 defineProps<{
-  files: ScheduleRow['attachmentFiles']
+  files: ScheduleAttachmentFile[]
 }>()
+
+async function preview(file: ScheduleAttachmentFile) {
+  if (file.id)
+    await previewEventAttachment(file.id)
+  else
+    previewScheduleAttachment(file)
+}
+
+async function download(file: ScheduleAttachmentFile) {
+  if (file.id)
+    await downloadEventAttachment(file.id, file.name)
+  else
+    downloadScheduleAttachment(file)
+}
 </script>
 
 <template>
   <ul v-if="files.length" class="flex flex-col gap-2">
     <li
       v-for="(file, index) in files"
-      :key="`${file.name}-${index}`"
+      :key="file.id ?? `${file.name}-${index}`"
       class="flex items-center gap-2 rounded-md border border-default px-2.5 py-2"
     >
       <div class="flex shrink-0 items-center rounded-full bg-elevated p-2">
@@ -36,7 +54,7 @@ defineProps<{
           size="sm"
           icon="i-lucide-eye"
           aria-label="Просмотреть файл"
-          @click="previewScheduleAttachment(file)"
+          @click="preview(file)"
         />
         <UButton
           color="neutral"
@@ -45,7 +63,7 @@ defineProps<{
           size="sm"
           icon="i-lucide-download"
           aria-label="Скачать файл"
-          @click="downloadScheduleAttachment(file)"
+          @click="download(file)"
         />
       </div>
     </li>

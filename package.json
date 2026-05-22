@@ -4,10 +4,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "pnpm --filter @crm/server dev",
+    "dev:all": "pnpm run --parallel dev dev:server",
     "build": "vite build",
+    "build:server": "pnpm --filter @crm/server build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "typecheck": "vue-tsc -p ./tsconfig.app.json"
+    "lint:server": "pnpm --filter @crm/server typecheck",
+    "smoke:server": "node server/scripts/smoke.mjs",
+    "typecheck": "vue-tsc -p ./tsconfig.app.json && pnpm --filter @crm/server typecheck"
   },
   "dependencies": {
     "@internationalized/date": "^3.12.1",

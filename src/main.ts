@@ -9,13 +9,37 @@ import { createHead } from '@unhead/vue/client'
 import ui from '@nuxt/ui/vue-plugin'
 
 import App from './App.vue'
+import { getAuthToken } from './api/client'
+import { useAuth } from './composables/useAuth'
 
 const app = createApp(App)
 
 const head = createHead()
 const router = createRouter({
   routes: setupLayouts(routes as RouteRecordRaw[]),
-  history: createWebHistory()
+  history: createWebHistory(),
+})
+
+router.beforeEach(async (to) => {
+  const isPublic = Boolean(to.meta.public)
+  const token = getAuthToken()
+
+  if (!token && !isPublic)
+    return { path: '/login', query: { redirect: to.fullPath } }
+
+  if (token && to.path === '/login')
+    return { path: '/schedule' }
+
+  if (token && !isPublic) {
+    const { fetchMe, ready, canViewLogs } = useAuth()
+    if (!ready.value)
+      await fetchMe()
+    if (!getAuthToken())
+      return { path: '/login', query: { redirect: to.fullPath } }
+
+    if (to.meta.requiresAdmin && !canViewLogs.value)
+      return { path: '/schedule' }
+  }
 })
 
 app.use(head)

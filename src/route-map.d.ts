@@ -22,7 +22,6 @@ declare module 'vue-router' {
   interface TypesConfig {
     ParamParsers:
       | never
-    RouteNamedMap: import('vue-router/auto-routes').RouteNamedMap
   }
 }
 
@@ -55,6 +54,20 @@ declare module 'vue-router/auto-routes' {
     '/inbox': RouteRecordInfo<
       '/inbox',
       '/inbox',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/login': RouteRecordInfo<
+      '/login',
+      '/login',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/logs/': RouteRecordInfo<
+      '/logs/',
+      '/logs',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -145,6 +158,18 @@ declare module 'vue-router/auto-routes' {
     'src/pages/inbox.vue': {
       routes:
         | '/inbox'
+      views:
+        | never
+    }
+    'src/pages/login.vue': {
+      routes:
+        | '/login'
+      views:
+        | never
+    }
+    'src/pages/logs/index.vue': {
+      routes:
+        | '/logs/'
       views:
         | never
     }

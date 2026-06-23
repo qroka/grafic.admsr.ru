@@ -1,4 +1,5 @@
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { fetchActivityLogs } from '../api/logs'
 import type { ActivityLogEntry, ActivityLogLevel, ActivityLogScope } from '../types/logs'
 
@@ -44,6 +45,7 @@ export function useActivityLogs() {
     searchQuery.value = ''
     levelFilter.value = 'all'
     offset.value = 0
+    void load()
   }
 
   function nextPage() {
@@ -56,12 +58,25 @@ export function useActivityLogs() {
     offset.value = Math.max(0, offset.value - PAGE_SIZE)
   }
 
-  watch([searchQuery, levelFilter, logScope], () => {
+  const debouncedLoad = useDebounceFn(() => {
+    offset.value = 0
+    void load()
+  }, 300)
+
+  watch(searchQuery, () => {
+    debouncedLoad()
+  })
+
+  watch([levelFilter, logScope], () => {
     offset.value = 0
     void load()
   })
 
   watch(offset, () => {
+    void load()
+  })
+
+  onMounted(() => {
     void load()
   })
 

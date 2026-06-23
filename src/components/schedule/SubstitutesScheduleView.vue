@@ -558,7 +558,7 @@ function cancelDeleteEvent() {
     <template #body>
       <div
         v-if="!scheduleLoading && !scheduleError"
-        class="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch"
+        class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch"
       >
         <UInput
           v-model="searchQuery"

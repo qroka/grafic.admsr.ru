@@ -338,7 +338,7 @@ function onCancelEdit() {
     </template>
 
     <template v-if="selection" #body>
-      <div class="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5">
+      <div class="flex flex-col gap-4">
         <div
           v-if="viewRestricted && !editable"
           class="flex flex-col gap-4"

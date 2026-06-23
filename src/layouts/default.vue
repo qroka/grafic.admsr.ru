@@ -6,7 +6,10 @@ import { useAuth } from '../composables/useAuth'
 import { schedulePathForSlug } from '../utils/schedule'
 
 const open = ref(false)
-const { canViewLogs } = useAuth()
+const { canViewLogs, fetchMe, ready } = useAuth()
+
+if (!ready.value)
+  void fetchMe()
 
 const scheduleNavChildren = scheduleTitleOptions.map(opt => ({
   label: opt.label,

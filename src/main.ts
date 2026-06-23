@@ -51,7 +51,8 @@ router.beforeEach(async (to) => {
     if (!getAuthToken())
       return { path: '/login', query: { redirect: to.fullPath } }
 
-    if (to.meta.requiresAdmin && !canViewLogs.value)
+    const isLogsRoute = to.path === '/logs' || to.path === '/logs/'
+    if ((to.meta.requiresAdmin || isLogsRoute) && !canViewLogs.value)
       return { path: '/' }
 
     if (to.path === '/customers')

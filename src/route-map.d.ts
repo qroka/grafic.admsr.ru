@@ -37,6 +37,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/[substitute]': RouteRecordInfo<
+      '/[substitute]',
+      '/:substitute',
+      { substitute: ParamValue<true> },
+      { substitute: ParamValue<false> },
+      | never
+    >,
     '/customers': RouteRecordInfo<
       '/customers',
       '/customers',
@@ -65,25 +72,18 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/logs': RouteRecordInfo<
+      '/logs',
+      '/logs',
+      Record<never, never>,
+      Record<never, never>,
+      | '/logs/'
+    >,
     '/logs/': RouteRecordInfo<
       '/logs/',
       '/logs',
       Record<never, never>,
       Record<never, never>,
-      | never
-    >,
-    '/schedule/': RouteRecordInfo<
-      '/schedule/',
-      '/schedule',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
-    '/schedule/[substitute]': RouteRecordInfo<
-      '/schedule/[substitute]',
-      '/schedule/:substitute',
-      { substitute: ParamValue<true> },
-      { substitute: ParamValue<false> },
       | never
     >,
     '/settings': RouteRecordInfo<
@@ -143,6 +143,12 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'src/pages/[substitute].vue': {
+      routes:
+        | '/[substitute]'
+      views:
+        | never
+    }
     'src/pages/customers.vue': {
       routes:
         | '/customers'
@@ -167,21 +173,16 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'src/pages/logs.vue': {
+      routes:
+        | '/logs'
+        | '/logs/'
+      views:
+        | 'default'
+    }
     'src/pages/logs/index.vue': {
       routes:
         | '/logs/'
-      views:
-        | never
-    }
-    'src/pages/schedule/index.vue': {
-      routes:
-        | '/schedule/'
-      views:
-        | never
-    }
-    'src/pages/schedule/[substitute].vue': {
-      routes:
-        | '/schedule/[substitute]'
       views:
         | never
     }

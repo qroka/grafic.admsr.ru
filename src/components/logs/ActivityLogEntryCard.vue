@@ -54,8 +54,7 @@ const hasDetails = computed(() => activityLogHasEventDetails(props.entry)
 <template>
   <UCard
     variant="subtle"
-    :ui="{ body: 'p-0 sm:p-0' }"
-    class="overflow-hidden transition-colors hover:ring-primary/20"
+    class="shrink-0 overflow-hidden transition-colors hover:ring-primary/20"
   >
     <button
       type="button"

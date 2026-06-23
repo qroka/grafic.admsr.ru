@@ -63,13 +63,7 @@ function onLevelChange(value: unknown) {
 </script>
 
 <template>
-  <UDashboardPanel
-    id="activity-logs"
-    :ui="{
-      root: 'flex min-h-0 min-w-0 flex-1 flex-col',
-      body: 'flex min-h-0 flex-1 flex-col overflow-hidden',
-    }"
-  >
+  <UDashboardPanel id="activity-logs">
     <template #header>
       <UDashboardNavbar title="Журнал событий">
         <template #leading>
@@ -90,70 +84,74 @@ function onLevelChange(value: unknown) {
 
     <template #body>
       <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
-        <p class="text-sm text-muted">
-          История входов, изменений мероприятий и системных действий. Доступно только администраторам.
-        </p>
+        <div class="shrink-0 space-y-4">
+          <p class="text-sm text-muted">
+            История входов, изменений мероприятий и системных действий.
+          </p>
 
-        <UTabs
-          v-model="logScope"
-          :items="scopeTabs"
-          :content="false"
-          color="neutral"
-          class="w-full max-w-md"
-        />
-
-        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <UInput
-            v-model="searchQuery"
-            icon="i-lucide-search"
-            placeholder="Поиск по сообщению, пользователю, IP…"
-            size="lg"
-            class="min-w-0 flex-1"
-          />
-
-          <USelect
-            :model-value="levelFilter"
-            :items="[...levelOptions]"
-            value-key="value"
-            label-key="label"
-            size="lg"
-            class="w-full sm:w-56"
-            @update:model-value="onLevelChange"
-          />
-
-          <UButton
-            v-if="hasActiveFilters"
-            label="Сбросить"
-            icon="i-lucide-filter-x"
+          <UTabs
+            v-model="logScope"
+            :items="scopeTabs"
+            :content="false"
             color="neutral"
-            variant="outline"
-            size="lg"
-            @click="resetFilters()"
+            class="w-full max-w-md"
+          />
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <UInput
+              v-model="searchQuery"
+              icon="i-lucide-search"
+              placeholder="Поиск по сообщению, пользователю, IP…"
+              size="lg"
+              class="min-w-0 flex-1"
+            />
+
+            <USelect
+              :model-value="levelFilter"
+              :items="[...levelOptions]"
+              value-key="value"
+              label-key="label"
+              size="lg"
+              class="w-full sm:w-56"
+              @update:model-value="onLevelChange"
+            />
+
+            <UButton
+              v-if="hasActiveFilters"
+              label="Сбросить"
+              icon="i-lucide-filter-x"
+              color="neutral"
+              variant="outline"
+              size="lg"
+              @click="resetFilters()"
+            />
+          </div>
+
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-circle-alert"
+            title="Не удалось загрузить журнал"
+            :description="error"
           />
         </div>
 
-        <UAlert
-          v-if="error"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-circle-alert"
-          title="Не удалось загрузить журнал"
-          :description="error"
-        />
-
         <div
           v-if="loading && !items.length"
-          class="flex flex-1 flex-col items-center justify-center gap-3 py-16"
+          class="flex flex-1 items-center justify-center py-16"
         >
-          <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-primary" />
-          <p class="text-sm text-muted">
-            Загружаем записи…
-          </p>
+          <div class="flex flex-col items-center gap-3">
+            <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-primary" />
+            <p class="text-sm text-muted">
+              Загружаем записи…
+            </p>
+          </div>
         </div>
 
         <UEmpty
           v-else-if="!loading && !items.length"
-          class="flex-1 py-12"
+          class="py-12"
           icon="i-lucide-scroll-text"
           title="Записей пока нет"
           :description="hasActiveFilters
@@ -163,18 +161,20 @@ function onLevelChange(value: unknown) {
 
         <div
           v-else
-          class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pe-0.5"
+          class="min-h-0 flex-1 overflow-y-auto"
         >
-          <ActivityLogEntryCard
-            v-for="entry in items"
-            :key="entry.id"
-            :entry="entry"
-          />
+          <div class="space-y-3 pb-1">
+            <ActivityLogEntryCard
+              v-for="entry in items"
+              :key="entry.id"
+              :entry="entry"
+            />
+          </div>
         </div>
 
         <div
           v-if="total > pageSize"
-          class="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-4"
+          class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-default pt-4"
         >
           <p class="text-sm text-muted tabular-nums">
             {{ pageRangeLabel }}

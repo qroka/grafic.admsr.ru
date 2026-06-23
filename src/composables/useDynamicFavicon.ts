@@ -1,4 +1,4 @@
-import { nextTick, onScopeDispose, ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 import { useColorMode } from '@vueuse/core'
 import {
   buildBrandLogoSvg,
@@ -7,6 +7,7 @@ import {
   rasterImageToColoredDataUrl,
   readPrimaryColor,
   recolorSvgMarkup,
+  resolveIsDark,
   revokeObjectUrl,
   svgMarkupToBlobUrl,
   updateFaviconHref,
@@ -88,27 +89,29 @@ export function useDynamicFavicon(options: UseDynamicFaviconOptions = {}) {
     primaryColor.value = color
   }
 
-  function scheduleUpdate(): void {
+  function scheduleUpdate(primary = appConfig.ui.colors.primary, mode = colorMode.value): void {
     if (typeof window === 'undefined')
       return
 
-    requestAnimationFrame(() => {
-      void applyFavicon(readPrimaryColor())
-    })
+    const isDark = resolveIsDark(mode)
+    const color = readPrimaryColor(primary, isDark)
+    void applyFavicon(color)
   }
 
   if (typeof window !== 'undefined') {
     watch(
       () => [appConfig.ui.colors.primary, colorMode.value] as const,
-      async () => {
-        await nextTick()
-        scheduleUpdate()
+      ([primary, mode]) => {
+        scheduleUpdate(primary, mode)
       },
       { immediate: true },
     )
 
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-    prefersDark.addEventListener('change', scheduleUpdate)
+    prefersDark.addEventListener('change', () => {
+      if (colorMode.value === 'auto')
+        scheduleUpdate()
+    })
 
     onScopeDispose(() => {
       prefersDark.removeEventListener('change', scheduleUpdate)

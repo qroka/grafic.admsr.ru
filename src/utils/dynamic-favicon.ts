@@ -3,50 +3,64 @@ import { BRAND_LOGO_PATH_D, BRAND_LOGO_VIEW_BOX } from '../constants/brand-logo'
 const FAVICON_LINK_SELECTOR = 'link[rel="icon"], link[rel="shortcut icon"]'
 const DEFAULT_FALLBACK_COLOR = '#00C16A'
 
-let colorProbe: HTMLSpanElement | null = null
-
 function isClient(): boolean {
   return typeof document !== 'undefined'
 }
 
+export function resolveIsDark(colorMode: string): boolean {
+  if (!isClient())
+    return false
+  if (colorMode === 'dark')
+    return true
+  if (colorMode === 'light')
+    return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function resolvePaletteName(primary: string): string {
+  return primary === 'neutral' ? 'old-neutral' : primary
+}
+
+function resolveCssColor(cssValue: string): string | null {
+  if (!cssValue || cssValue.startsWith('var('))
+    return null
+
+  const probe = document.createElement('span')
+  probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;color:' + cssValue
+  document.body.appendChild(probe)
+  const resolved = getComputedStyle(probe).color
+  probe.remove()
+
+  if (resolved && resolved !== 'rgba(0, 0, 0, 0)' && resolved !== 'transparent')
+    return resolved
+
+  return cssValue
+}
+
 /**
- * Reads the resolved primary color from Nuxt UI (`text-primary` → `--ui-primary`).
+ * Reads primary shade for the selected palette name (not stale `--ui-primary`).
+ * Nuxt UI: 500 in light, 400 in dark — same as `text-primary`.
  */
-export function readPrimaryColor(): string {
+export function readPrimaryColor(primary: string, isDark: boolean): string {
   if (!isClient())
     return DEFAULT_FALLBACK_COLOR
 
-  if (!colorProbe) {
-    colorProbe = document.createElement('span')
-    colorProbe.className = 'text-primary'
-    colorProbe.setAttribute('aria-hidden', 'true')
-    colorProbe.style.cssText = [
-      'position:absolute',
-      'width:0',
-      'height:0',
-      'overflow:hidden',
-      'pointer-events:none',
-      'visibility:hidden',
-    ].join(';')
-    document.body.appendChild(colorProbe)
+  const shade = isDark ? 400 : 500
+  const paletteName = resolvePaletteName(primary)
+  const cssVar = `--color-${paletteName}-${shade}`
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim()
+
+  if (raw) {
+    const resolved = resolveCssColor(raw)
+    if (resolved)
+      return resolved
   }
-
-  const { color } = getComputedStyle(colorProbe)
-  if (color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent')
-    return color
-
-  const cssPrimary = getComputedStyle(document.documentElement)
-    .getPropertyValue('--ui-primary')
-    .trim()
-  if (cssPrimary)
-    return cssPrimary
 
   return DEFAULT_FALLBACK_COLOR
 }
 
 export function disposePrimaryColorProbe(): void {
-  colorProbe?.remove()
-  colorProbe = null
+  // kept for API compatibility; no persistent probe is used
 }
 
 export function buildBrandLogoSvg(color: string): string {

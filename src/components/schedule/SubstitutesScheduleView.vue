@@ -151,6 +151,47 @@ function dayEntries(block: ScheduleDateBlock): ScheduleDayEntry[] {
   return collectBlockEntriesSortedByTime(block)
 }
 
+function dayEventCount(block: ScheduleDateBlock): number {
+  return dayEntries(block).length
+}
+
+const emptyStateTitle = computed(() =>
+  hasActiveFilters.value
+    ? 'Ничего не найдено'
+    : 'В графике пока нет мероприятий',
+)
+
+const emptyStateDescription = computed(() =>
+  hasActiveFilters.value
+    ? 'Попробуйте изменить запрос или сбросить фильтры.'
+    : canCreateEvents.value
+      ? 'Добавьте первое мероприятие — оно появится в списке и на доске.'
+      : 'Мероприятия появятся здесь, когда их добавят в график.',
+)
+
+const emptyStateActions = computed(() => {
+  const actions: { label: string, icon: string, color?: 'primary' | 'neutral', variant?: 'solid' | 'outline' | 'soft', onClick: () => void }[] = []
+  if (hasActiveFilters.value) {
+    actions.push({
+      label: 'Сбросить фильтры',
+      icon: 'i-lucide-filter-x',
+      color: 'neutral',
+      variant: 'outline',
+      onClick: resetScheduleFilters,
+    })
+  }
+  if (canCreateEvents.value) {
+    actions.push({
+      label: 'Добавить мероприятие',
+      icon: 'i-lucide-plus',
+      color: 'primary',
+      variant: 'solid',
+      onClick: () => onCreateEvent(),
+    })
+  }
+  return actions
+})
+
 function dayEntryKey(blockId: string, entry: ScheduleDayEntry, index: number): string {
   return `${blockId}-${entry.group.substituteKey}-${index}-${isScheduleRowAllDay(entry.row) ? 'all-day' : entry.row.time}`
 }
@@ -320,6 +361,10 @@ watch(createDayBlockId, () => {
     syncCreateSelection()
 })
 
+function onEventSlideoverEdit() {
+  eventSlideoverEditable.value = true
+}
+
 async function onEventSlideoverSaved() {
   const s = eventSelection.value
   if (!s)
@@ -470,17 +515,21 @@ function cancelDeleteEvent() {
   }">
     <div
       v-if="scheduleLoading"
-      class="mb-3 flex items-center gap-2 text-sm text-muted"
+      class="mb-4 flex flex-1 flex-col items-center justify-center gap-3 py-16"
     >
-      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
-      Загрузка графика…
+      <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-primary" />
+      <p class="text-sm text-muted">
+        Загружаем график…
+      </p>
     </div>
     <UAlert
       v-else-if="scheduleError"
       color="error"
       variant="subtle"
-      class="mb-3"
-      :title="scheduleError"
+      class="mb-4"
+      icon="i-lucide-circle-alert"
+      title="Не удалось загрузить график"
+      :description="scheduleError"
     />
     <template #header>
       <UDashboardNavbar :ui="{ right: 'gap-3' }">
@@ -507,35 +556,75 @@ function cancelDeleteEvent() {
 
 
     <template #body>
-      <UContainer class="w-full max-w-full flex flex-row gap-2 sm:px-0 md:px-0 lg:px-0 xl:px-0 m-0">
-        <UInput v-model="searchQuery" icon="i-lucide-search" placeholder="Поиск по теме, месту, времени…" class="w-full"
-          :ui="{ trailing: 'pe-1' }" size="lg">
-        </UInput>
-
-        <USelectMenu v-model="selectedParticipantKeys" :items="participantSelectItems" value-key="value" multiple
-          size="lg" :search-input="{ placeholder: 'Найти участника…' }" placeholder="Участники" icon="i-lucide-users"
-          class="w-full"
-          :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }" />
-        <UButton v-if="hasActiveFilters" label="Сбросить" color="neutral" variant="ghost" size="lg"
-          icon="i-lucide-filter-x" @click="resetScheduleFilters" />
-
-        <UButton
-          v-if="canCreateEvents"
-          label="Добавить мероприятие"
-          icon="i-lucide-plus"
-          color="primary"
+      <div
+        v-if="!scheduleLoading && !scheduleError"
+        class="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch"
+      >
+        <UInput
+          v-model="searchQuery"
+          icon="i-lucide-search"
+          placeholder="Поиск по теме, месту, времени…"
+          class="min-w-0 flex-1"
           size="lg"
-          class="shrink-0"
-          @click="onCreateEvent()"
         />
-      </UContainer>
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <p
-          v-if="!scheduleLoading && !filteredBlocks.length"
-          class="text-muted py-12 text-center text-sm"
+
+        <USelectMenu
+          v-model="selectedParticipantKeys"
+          :items="participantSelectItems"
+          value-key="value"
+          multiple
+          size="lg"
+          :search-input="{ placeholder: 'Найти участника…' }"
+          placeholder="Участники"
+          icon="i-lucide-users"
+          class="w-full sm:w-72"
+          :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+        />
+
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <UButton
+            v-if="hasActiveFilters"
+            label="Сбросить"
+            color="neutral"
+            variant="outline"
+            size="lg"
+            icon="i-lucide-filter-x"
+            @click="resetScheduleFilters"
+          />
+
+          <UButton
+            v-if="canCreateEvents"
+            label="Добавить"
+            icon="i-lucide-plus"
+            color="primary"
+            size="lg"
+            class="sm:px-5"
+            @click="onCreateEvent()"
+          />
+        </div>
+      </div>
+
+      <div v-if="!scheduleLoading && !scheduleError" class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <UEmpty
+          v-if="!filteredBlocks.length"
+          class="flex-1 py-16"
+          icon="i-lucide-calendar-x"
+          :title="emptyStateTitle"
+          :description="emptyStateDescription"
         >
-          {{ hasActiveFilters ? 'Нет мероприятий по выбранным фильтрам' : 'Нет мероприятий в графике' }}
-        </p>
+          <template v-if="emptyStateActions.length" #actions>
+            <UButton
+              v-for="(action, index) in emptyStateActions"
+              :key="index"
+              :label="action.label"
+              :icon="action.icon"
+              :color="action.color"
+              :variant="action.variant"
+              size="lg"
+              @click="action.onClick()"
+            />
+          </template>
+        </UEmpty>
 
         <div v-else-if="view === 'board'" class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div class="flex min-h-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden px-0.5 pb-2">
@@ -573,15 +662,22 @@ function cancelDeleteEvent() {
               </div>
 
               <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
-                <p v-if="!col.cards.length" class="text-muted py-6 text-center text-xs">
-                  Нет мероприятий
-                </p>
+                <UEmpty
+                  v-if="!col.cards.length"
+                  size="sm"
+                  variant="naked"
+                  icon="i-lucide-calendar-off"
+                  title="Нет мероприятий"
+                  description="На этот день записей пока нет"
+                  class="py-8"
+                />
                 <template v-for="c in col.cards" :key="c.cardKey">
                   <div :class="[
-                    'rounded-lg border border-default bg-default p-3 shadow-sm transition-[box-shadow,transform]',
+                    'rounded-lg border border-default bg-default p-3 shadow-sm transition-[box-shadow,transform,background-color]',
                     accentCardTopBorder(c.group.accent),
                     isScheduleGeneralView && accentSurfaceClass(c.group.accent),
-                    'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
+                    'cursor-pointer hover:-translate-y-0.5 hover:bg-elevated/30 hover:shadow-md',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   ]" role="button" tabindex="0" @click="onBoardCardActivate(c)"
                     @keydown.enter.prevent="onBoardCardActivate(c)" @keydown.space.prevent="onBoardCardActivate(c)">
                     <div class="mb-2 flex flex-wrap items-start gap-2">
@@ -609,10 +705,11 @@ function cancelDeleteEvent() {
                       <span class="truncate text-xs font-medium text-default">{{ c.group.name }}</span>
                     </div>
 
-                    <ScheduleHiddenEventLabel
-                      v-if="isScheduleRowViewRestricted(c.row)"
-                      class="py-1"
-                    />
+            <ScheduleHiddenEventLabel
+              v-if="isScheduleRowViewRestricted(c.row)"
+              size="sm"
+              class="py-1"
+            />
                     <template v-else>
                       <p class="line-clamp-4 text-sm font-medium leading-snug text-highlighted">
                         <span class="inline-flex items-start gap-1.5">
@@ -692,6 +789,14 @@ function cancelDeleteEvent() {
                     <span>{{ dayBlockHeadings.get(block.id)!.weekday }}</span>
                   </span>
                   <span v-else class="text-base font-semibold text-highlighted">{{ block.title }}</span>
+                  <UBadge
+                    v-if="dayEventCount(block)"
+                    color="neutral"
+                    variant="subtle"
+                    size="sm"
+                    :label="String(dayEventCount(block))"
+                    class="ms-auto tabular-nums"
+                  />
                 </UButton>
               </template>
 
@@ -703,7 +808,8 @@ function cancelDeleteEvent() {
                   >
                     <div :class="[
                       'grid cursor-pointer border-b border-default transition-colors hover:bg-elevated/40',
-                      isScheduleGeneralView && accentSurfaceClass(entry.group.accent)
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30',
+                      isScheduleGeneralView && accentSurfaceClass(entry.group.accent),
                     ]" :style="{ gridTemplateColumns: scheduleGridTemplate }" role="button" tabindex="0"
                       @click="onScheduleRowActivate(block, entry.group, entry.row)"
                       @keydown.enter.prevent="onScheduleRowActivate(block, entry.group, entry.row)"
@@ -799,7 +905,9 @@ function cancelDeleteEvent() {
         :is-create="eventSlideoverCreateMode"
         :create-day-blocks="createDayBlocks"
         :available-participants="scheduleParticipants"
+        :can-edit="eventSelection ? canEditGroup(eventSelection.group) : false"
         @saved="onEventSlideoverSaved"
+        @edit="onEventSlideoverEdit"
       />
 
       <UModal v-model:open="deleteModalOpen" title="Удалить мероприятие?" :description="deleteModalDescription">

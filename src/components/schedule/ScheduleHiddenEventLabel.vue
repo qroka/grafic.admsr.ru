@@ -7,16 +7,16 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <div
-    class="flex items-center gap-2 text-muted"
-    :class="size === 'sm' ? 'text-xs' : 'text-sm'"
-  >
-    <UIcon
-      name="i-lucide-eye-off"
-      class="shrink-0 text-dimmed"
-      :class="size === 'sm' ? 'size-4' : 'size-5'"
-      aria-hidden="true"
-    />
-    <span class="font-medium">Данное мероприятие скрыто</span>
-  </div>
+  <UAlert
+    color="warning"
+    variant="subtle"
+    icon="i-lucide-eye-off"
+    :title="size === 'sm' ? 'Скрытое мероприятие' : 'Мероприятие скрыто'"
+    description="Вам доступны только дата и время. Подробности видят участники и редакторы графика."
+    :ui="{
+      title: size === 'sm' ? 'text-xs font-medium' : 'text-sm font-medium',
+      description: size === 'sm' ? 'text-xs' : 'text-sm',
+      wrapper: size === 'sm' ? 'items-center' : undefined,
+    }"
+  />
 </template>

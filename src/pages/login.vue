@@ -33,38 +33,55 @@ async function onSubmit() {
 
 <template>
   <div class="flex min-h-dvh items-center justify-center bg-default p-6">
-    <UCard class="w-full max-w-md">
+    <UCard class="w-full max-w-md" :ui="{ body: 'p-6 sm:p-8' }">
       <template #header>
-        <h1 class="text-lg font-semibold text-highlighted">
-          Вход в CRM
-        </h1>
+        <div class="flex flex-col gap-1">
+          <h1 class="text-xl font-semibold text-highlighted">
+            График заместителей
+          </h1>
+          <p class="text-sm text-muted">
+            Войдите, чтобы открыть расписание
+          </p>
+        </div>
       </template>
 
       <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
-        <UFormField label="Логин">
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-circle-alert"
+          :title="error"
+        />
+
+        <UFormField label="Логин" required>
           <UInput
             v-model="loginName"
             autocomplete="username"
-            placeholder="Логин"
+            placeholder="Введите логин"
+            icon="i-lucide-user"
+            size="lg"
             class="w-full"
           />
         </UFormField>
-        <UFormField label="Пароль">
+
+        <UFormField label="Пароль" required>
           <UInput
             v-model="password"
             type="password"
             autocomplete="current-password"
-            placeholder="Пароль"
+            placeholder="Введите пароль"
+            icon="i-lucide-lock"
+            size="lg"
             class="w-full"
           />
         </UFormField>
-        <p v-if="error" class="text-sm text-error">
-          {{ error }}
-        </p>
+
         <UButton
           type="submit"
           label="Войти"
           color="primary"
+          size="lg"
           block
           :loading="loading"
         />

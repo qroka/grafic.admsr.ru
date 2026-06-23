@@ -48,6 +48,8 @@ const props = defineProps<{
   } | null
   /** Режим редактирования: поля активны, внизу «Отмена» / «Сохранить». */
   editable?: boolean
+  /** Можно перейти в редактирование из режима просмотра. */
+  canEdit?: boolean
   /** Создание нового мероприятия (только персональный график заместителя). */
   isCreate?: boolean
   /** Блоки дней графика для выбора даты при создании. */
@@ -62,10 +64,12 @@ const { user: authUser } = useAuth()
 
 const emit = defineEmits<{
   saved: []
+  edit: []
 }>()
 
 const editable = computed(() => Boolean(props.editable || props.isCreate))
 const isCreate = computed(() => Boolean(props.isCreate))
+const isReadOnly = computed(() => Boolean(props.selection) && !editable.value && !isCreate.value)
 const viewRestricted = computed(() =>
   props.selection ? isScheduleRowViewRestricted(props.selection.row) : false,
 )
@@ -306,17 +310,19 @@ function onCancelEdit() {
               variant="badge"
             />
             <span v-if="headerCreatedAt">{{ headerCreatedAt }}</span>
-            <span
-              v-if="headerCreatedAt && headerCreatorParticipant"
-              class="text-dimmed"
-              aria-hidden="true"
-            >·</span>
-            <ScheduleParticipantPopoverChip
-              v-if="headerCreatorParticipant"
-              variant="header"
-              is-creator
-              :participant="headerCreatorParticipant"
-            />
+            <template v-if="headerCreatorParticipant">
+              <span
+                v-if="headerCreatedAt"
+                class="text-dimmed"
+                aria-hidden="true"
+              >·</span>
+              <span class="text-xs text-dimmed">Создатель</span>
+              <ScheduleParticipantPopoverChip
+                variant="header"
+                is-creator
+                :participant="headerCreatorParticipant"
+              />
+            </template>
           </div>
         </div>
         <UButton
@@ -332,103 +338,191 @@ function onCancelEdit() {
     </template>
 
     <template v-if="selection" #body>
-      <div
-        v-if="viewRestricted && !editable"
-        class="flex flex-col gap-4 px-1 py-2"
-      >
-        <ScheduleHiddenEventLabel />
-        <div class="flex flex-wrap gap-6 text-sm">
-          <div>
-            <p class="text-xs text-dimmed">
-              Дата
-            </p>
-            <p class="font-medium text-default">
-              {{ draft.date || '—' }}
-            </p>
-          </div>
-          <div>
-            <p class="text-xs text-dimmed">
-              Время
-            </p>
-            <p class="font-medium text-default tabular-nums">
-              {{ formatScheduleRowTime(selection.row) }}
-            </p>
+      <div class="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5">
+        <div
+          v-if="viewRestricted && !editable"
+          class="flex flex-col gap-4"
+        >
+          <ScheduleHiddenEventLabel />
+          <div class="grid grid-cols-2 gap-4 sm:max-w-sm">
+            <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+              <p class="text-xs text-dimmed">
+                Дата
+              </p>
+              <p class="mt-1 font-medium text-default tabular-nums">
+                {{ draft.date || '—' }}
+              </p>
+            </UCard>
+            <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+              <p class="text-xs text-dimmed">
+                Время
+              </p>
+              <p class="mt-1 font-medium text-default tabular-nums">
+                {{ formatScheduleRowTime(selection.row) }}
+              </p>
+            </UCard>
           </div>
         </div>
-      </div>
 
-      <UForm
-        v-else
-        :id="EVENT_FORM_ID"
-        :state="draft"
-        :validate="validateEventForm"
-        class="flex flex-col gap-3"
-        @submit="onFormSubmit"
-      >
-        <USwitch
-          v-model="draft.hidden"
-          :disabled="!editable"
-          label="Скрыть мероприятие"
-        />
+        <div
+          v-else-if="isReadOnly"
+          class="flex flex-col gap-4"
+        >
+          <p class="text-lg font-semibold leading-snug text-highlighted">
+            {{ selection.row.topic }}
+          </p>
 
-        <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
-          <UFormField label="Дата" name="date" class="w-full shrink-0 sm:w-64">
-            <ScheduleDatePicker
-              v-model="draft.date"
-              :disabled="!editable"
-            />
-          </UFormField>
-          <UFormField v-if="!draft.allDay" label="Время" name="time" class="min-w-0 flex-1">
-            <ScheduleTimePicker
-              v-model="draft.time"
-              :disabled="!editable"
-              placeholder="09:00"
-            />
-          </UFormField>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <UCard variant="subtle" :ui="{ body: 'flex items-start gap-3 p-3 sm:p-4' }">
+              <UIcon name="i-lucide-calendar" class="mt-0.5 size-4 shrink-0 text-dimmed" />
+              <div>
+                <p class="text-xs text-dimmed">
+                  Дата и время
+                </p>
+                <p class="mt-1 text-sm font-medium text-default">
+                  {{ draft.date || '—' }}
+                  <span class="text-muted">·</span>
+                  <span class="tabular-nums">{{ formatScheduleRowTime(selection.row) }}</span>
+                </p>
+              </div>
+            </UCard>
+
+            <UCard variant="subtle" :ui="{ body: 'flex items-start gap-3 p-3 sm:p-4' }">
+              <UIcon name="i-lucide-map-pin" class="mt-0.5 size-4 shrink-0 text-dimmed" />
+              <div class="min-w-0">
+                <p class="text-xs text-dimmed">
+                  Место
+                </p>
+                <p class="mt-1 text-sm font-medium text-default">
+                  {{ draft.address || '—' }}
+                </p>
+              </div>
+            </UCard>
+          </div>
+
+          <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+            <p class="mb-2 text-xs text-dimmed">
+              Участники
+            </p>
+            <div v-if="selectedParticipants.length" class="flex flex-wrap gap-2">
+              <ScheduleParticipantPopoverChip
+                v-for="participant in selectedParticipants"
+                :key="scheduleParticipantKey(participant)"
+                variant="field"
+                :participant="participant"
+              />
+            </div>
+            <p v-else class="text-sm text-muted">
+              Участники не указаны
+            </p>
+          </UCard>
+
+          <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+            <p class="mb-2 text-xs text-dimmed">
+              Приложения
+            </p>
+            <ScheduleAttachmentList :files="selection.row.attachmentFiles" />
+          </UCard>
         </div>
 
-        <USwitch
-          v-model="draft.allDay"
-          :disabled="!editable"
-          label="Весь день"
-        />
+        <UForm
+          v-else
+          :id="EVENT_FORM_ID"
+          :state="draft"
+          :validate="validateEventForm"
+          class="flex flex-col gap-4"
+          @submit="onFormSubmit"
+        >
+          <UCard variant="subtle" :ui="{ body: 'flex flex-col gap-3 p-3 sm:p-4' }">
+            <USwitch
+              v-model="draft.hidden"
+              :disabled="!editable"
+              label="Скрыть мероприятие"
+              description="Скрытые мероприятия видят не все пользователи"
+            />
+            <UAlert
+              v-if="draft.hidden"
+              color="warning"
+              variant="subtle"
+              icon="i-lucide-info"
+              title="Мероприятие будет скрыто"
+              description="В общем графике другие пользователи увидят только дату и время, если у них нет доступа."
+            />
+          </UCard>
 
-        <UFormField label="Адрес" name="address">
-          <UInput
-            v-model="draft.address"
-            :disabled="!editable"
-            variant="outline"
-            placeholder="Укажите адрес проведения"
-            class="w-full"
-          />
-        </UFormField>
+          <UCard variant="subtle" :ui="{ body: 'flex flex-col gap-4 p-3 sm:p-4' }">
+            <p class="text-xs font-medium tracking-wide text-dimmed uppercase">
+              Когда
+            </p>
+            <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
+              <UFormField label="Дата" name="date" class="w-full shrink-0 sm:w-64">
+                <ScheduleDatePicker
+                  v-model="draft.date"
+                  :disabled="!editable"
+                />
+              </UFormField>
+              <UFormField v-if="!draft.allDay" label="Время" name="time" class="min-w-0 flex-1">
+                <ScheduleTimePicker
+                  v-model="draft.time"
+                  :disabled="!editable"
+                  placeholder="09:00"
+                />
+              </UFormField>
+            </div>
 
-        <UFormField label="Тема" name="topic">
-          <UTextarea
-            v-model="draft.topic"
-            :disabled="!editable"
-            variant="outline"
-            placeholder="Кратко опишите тему мероприятия"
-            :rows="4"
-            autoresize
-            class="w-full"
-          />
-        </UFormField>
+            <USwitch
+              v-model="draft.allDay"
+              :disabled="!editable"
+              label="Весь день"
+            />
+          </UCard>
 
-        <UFormField label="Участники">
-          <ScheduleParticipantsField
-            v-model="selectedParticipantKeys"
-            :available-participants="participantsForField"
-            :disabled="!editable"
-          />
-        </UFormField>
+          <UCard variant="subtle" :ui="{ body: 'flex flex-col gap-4 p-3 sm:p-4' }">
+            <p class="text-xs font-medium tracking-wide text-dimmed uppercase">
+              Описание
+            </p>
+            <UFormField label="Адрес" name="address">
+              <UInput
+                v-model="draft.address"
+                :disabled="!editable"
+                variant="outline"
+                icon="i-lucide-map-pin"
+                placeholder="Укажите адрес проведения"
+                class="w-full"
+              />
+            </UFormField>
 
-        <UFormField label="Приложения">
-          <ScheduleAttachmentList
-            v-if="!editable"
-            :files="selection.row.attachmentFiles"
-          />
-          <div v-else class="flex flex-col gap-3">
+            <UFormField label="Тема" name="topic">
+              <UTextarea
+                v-model="draft.topic"
+                :disabled="!editable"
+                variant="outline"
+                placeholder="Кратко опишите тему мероприятия"
+                :rows="4"
+                autoresize
+                class="w-full"
+              />
+            </UFormField>
+          </UCard>
+
+          <UCard variant="subtle" :ui="{ body: 'flex flex-col gap-4 p-3 sm:p-4' }">
+            <p class="text-xs font-medium tracking-wide text-dimmed uppercase">
+              Участники и файлы
+            </p>
+            <UFormField label="Участники">
+              <ScheduleParticipantsField
+                v-model="selectedParticipantKeys"
+                :available-participants="participantsForField"
+                :disabled="!editable"
+              />
+            </UFormField>
+
+            <UFormField label="Приложения">
+              <ScheduleAttachmentList
+                v-if="!editable"
+                :files="selection.row.attachmentFiles"
+              />
+              <div v-else class="flex flex-col gap-3">
             <ul v-if="attachmentItems.length" class="flex flex-col gap-2">
               <li
                 v-for="(item, index) in attachmentItems"
@@ -499,12 +593,25 @@ function onCancelEdit() {
                 />
               </template>
             </UFileUpload>
-          </div>
-        </UFormField>
-      </UForm>
+              </div>
+            </UFormField>
+          </UCard>
+        </UForm>
+      </div>
     </template>
 
-    <template v-if="selection && (editable || isCreate)" #footer>
+    <template v-if="selection && isReadOnly && canEdit" #footer>
+      <UButton
+        label="Редактировать"
+        icon="i-lucide-pencil"
+        color="primary"
+        size="lg"
+        block
+        @click="emit('edit')"
+      />
+    </template>
+
+    <template v-else-if="selection && (editable || isCreate)" #footer>
       <div class="flex w-full gap-2">
         <UButton
           label="Отмена"

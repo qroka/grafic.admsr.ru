@@ -13,10 +13,10 @@ withDefaults(defineProps<{
 <template>
   <UTooltip
     v-if="variant === 'icon'"
-    text="Скрытое мероприятие"
+    text="Скрытое мероприятие — не отображается для всех пользователей"
   >
     <span
-      class="inline-flex shrink-0 items-center justify-center rounded-sm text-dimmed transition-colors hover:text-muted"
+      class="inline-flex shrink-0 items-center justify-center rounded-md bg-warning/10 p-0.5 text-warning transition-colors hover:bg-warning/15"
       role="img"
       aria-label="Скрытое мероприятие"
       tabindex="0"
@@ -24,14 +24,14 @@ withDefaults(defineProps<{
     >
       <UIcon
         name="i-lucide-eye-off"
-        class="size-4"
+        class="size-3.5"
         aria-hidden="true"
       />
     </span>
   </UTooltip>
   <UBadge
     v-else
-    color="neutral"
+    color="warning"
     variant="subtle"
     size="sm"
     icon="i-lucide-eye-off"

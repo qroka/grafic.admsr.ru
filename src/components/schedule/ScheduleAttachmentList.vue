@@ -33,7 +33,7 @@ async function download(file: ScheduleAttachmentFile) {
     <li
       v-for="(file, index) in files"
       :key="file.id ?? `${file.name}-${index}`"
-      class="flex items-center gap-2 rounded-md border border-default px-2.5 py-2"
+      class="flex items-center gap-2 rounded-md border border-default bg-default px-2.5 py-2"
     >
       <div class="flex shrink-0 items-center rounded-full bg-elevated p-2">
         <UIcon name="i-lucide-file" class="size-4 text-muted" />
@@ -68,7 +68,13 @@ async function download(file: ScheduleAttachmentFile) {
       </div>
     </li>
   </ul>
-  <p v-else class="text-sm text-muted">
-    Файлов нет
-  </p>
+  <UEmpty
+    v-else
+    size="sm"
+    variant="naked"
+    icon="i-lucide-paperclip"
+    title="Файлов нет"
+    description="К этому мероприятию пока не прикреплены документы"
+    class="py-4"
+  />
 </template>

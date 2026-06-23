@@ -4,9 +4,11 @@ import { useHead } from '@unhead/vue'
 import { useColorMode } from '@vueuse/core'
 import { ru } from '@nuxt/ui/locale'
 import { useDynamicFavicon } from './composables/useDynamicFavicon'
+import { useThemePreferences } from './composables/useThemePreferences'
 
 const colorMode = useColorMode()
 useDynamicFavicon()
+useThemePreferences()
 
 /** Совпадает с `bg-default` у `body` (Nuxt UI), для `<meta name="theme-color">`. */
 const themeColor = ref('#ffffff')

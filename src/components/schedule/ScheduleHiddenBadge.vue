@@ -16,7 +16,7 @@ withDefaults(defineProps<{
     text="Скрытое мероприятие — не отображается для всех пользователей"
   >
     <span
-      class="inline-flex shrink-0 items-center justify-center rounded-md bg-warning/10 p-0.5 text-warning transition-colors hover:bg-warning/15"
+      class="inline-flex shrink-0 items-center justify-center rounded-md bg-elevated p-0.5 text-muted ring ring-inset ring-default transition-colors hover:bg-accented hover:text-default"
       role="img"
       aria-label="Скрытое мероприятие"
       tabindex="0"
@@ -31,7 +31,7 @@ withDefaults(defineProps<{
   </UTooltip>
   <UBadge
     v-else
-    color="warning"
+    color="neutral"
     variant="subtle"
     size="sm"
     icon="i-lucide-eye-off"

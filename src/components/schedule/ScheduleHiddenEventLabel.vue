@@ -8,7 +8,7 @@ withDefaults(defineProps<{
 
 <template>
   <UAlert
-    color="warning"
+    color="neutral"
     variant="subtle"
     icon="i-lucide-eye-off"
     :title="size === 'sm' ? 'Скрытое мероприятие' : 'Мероприятие скрыто'"

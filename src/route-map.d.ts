@@ -77,13 +77,6 @@ declare module 'vue-router/auto-routes' {
       '/logs',
       Record<never, never>,
       Record<never, never>,
-      | '/logs/'
-    >,
-    '/logs/': RouteRecordInfo<
-      '/logs/',
-      '/logs',
-      Record<never, never>,
-      Record<never, never>,
       | never
     >,
     '/settings': RouteRecordInfo<
@@ -176,13 +169,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/logs.vue': {
       routes:
         | '/logs'
-        | '/logs/'
-      views:
-        | 'default'
-    }
-    'src/pages/logs/index.vue': {
-      routes:
-        | '/logs/'
       views:
         | never
     }

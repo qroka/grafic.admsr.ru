@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
+import { useHead } from '@unhead/vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import {
@@ -236,6 +237,10 @@ const titleMenuItems = computed<DropdownMenuItem[][]>(() => [
 ])
 
 const headerTitle = computed(() => scheduleNavbarHeading(scope.value))
+
+useHead({
+  title: headerTitle,
+})
 
 const navbarAvatar = computed(() => scheduleNavbarAvatar(scope.value))
 

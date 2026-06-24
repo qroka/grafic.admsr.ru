@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, h, ref, resolveComponent, watch } from 'vue'
+import { useHead } from '@unhead/vue'
 import type { TableColumn, TableRow } from '@nuxt/ui'
 import {
   fetchCrmUsers,
@@ -39,6 +40,8 @@ const t = {
 }
 
 const emptyCell = '-'
+
+useHead({ title: 'График заместителей' })
 
 const { canViewLogs } = useAuth()
 const toast = useToast()

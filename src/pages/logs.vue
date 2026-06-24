@@ -5,6 +5,7 @@ meta:
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useHead } from '@unhead/vue'
 import type { TabsItem } from '@nuxt/ui'
 import { fetchEventById } from '../api/events'
 import { buildScheduleEventSelection } from '../api/schedule-mapper'
@@ -22,6 +23,8 @@ import type {
 } from '../types/schedule'
 import { activityLogScopeLabel, resolveLogActorParticipant } from '../utils/logs'
 import { createScheduleDateBlocks } from '../utils/schedule'
+
+useHead({ title: 'График заместителей' })
 
 const toast = useToast()
 const { canEditSubstituteSlug } = usePermissions()

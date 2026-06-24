@@ -24,7 +24,7 @@ watchEffect(async () => {
 })
 
 useHead(() => ({
-  title: 'График',
+  title: 'График заместителей',
   htmlAttrs: { lang: 'ru' },
   meta: [
     { name: 'theme-color', content: themeColor.value }

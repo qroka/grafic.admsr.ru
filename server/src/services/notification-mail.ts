@@ -15,11 +15,21 @@ export function initNotificationMail(
 ): void {
   mailEnv = env
   mailLogger = logger
+
+  const mailConfig = buildMailConfig(env)
   logger?.info({
     mailEnabled: env.MAIL_ENABLED,
-    sendmailPath: env.MAIL_SENDMAIL_PATH,
+    mailTransport: mailConfig.transport,
+    crmMailPath: env.CRM_MAIL_PATH,
+    sendmailPath: mailConfig.sendmailPath,
     blacklistCount: env.MAIL_BLACKLIST.split(/[,;]/).filter(s => s.trim()).length,
   }, 'notification mail configured')
+
+  if (env.MAIL_ENABLED && mailConfig.transport === 'sendmail' && !mailConfig.sendmailPath) {
+    logger?.warn(
+      'MAIL_TRANSPORT=sendmail, но sendmail не найден. Установите postfix или переключите MAIL_TRANSPORT=crm',
+    )
+  }
 }
 
 function appBaseUrl(env: Env): string {
@@ -78,7 +88,7 @@ export async function deliverNotificationEmail(
   let sent = 0
 
   for (const email of emails) {
-    const ok = await sendPlainTextMail(config, email, subject, text, mailLogger)
+    const ok = await sendPlainTextMail(env, config, email, subject, text, mailLogger)
     if (ok)
       sent++
   }

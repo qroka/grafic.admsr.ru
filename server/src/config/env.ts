@@ -36,7 +36,9 @@ const envSchema = z.object({
   CRM_LOOKUP_URL: z.string().url().optional(),
   /** Секрет для SSO-токена из schedule.php (тот же SCHEDULE_SSO_SECRET / CRM_LOOKUP_SECRET в PHP). */
   SCHEDULE_SSO_SECRET: z.string().optional(),
-  /** Отправка уведомлений на почту (sendmail, как mail() в HelpDesk). */
+  /** Отправка почты: crm — через crm_send_mail.php на 30.42, sendmail — локально. */
+  MAIL_TRANSPORT: z.enum(['crm', 'sendmail']).default('crm'),
+  CRM_MAIL_PATH: z.string().default('/crm_send_mail.php'),
   MAIL_ENABLED: z
     .string()
     .default('false')
@@ -45,7 +47,8 @@ const envSchema = z.object({
   MAIL_REPLY_TO: z.string().email().default('postmaster@admsr.ru'),
   MAIL_SUBJECT_PREFIX: z.string().default('График заместителей'),
   MAIL_BLACKLIST: z.string().default(''),
-  MAIL_SENDMAIL_PATH: z.string().default('/usr/sbin/sendmail'),
+  /** Пусто — авто-поиск (/usr/sbin/sendmail, /usr/bin/sendmail, which sendmail). */
+  MAIL_SENDMAIL_PATH: z.string().default(''),
 })
 
 export type Env = z.infer<typeof envSchema>

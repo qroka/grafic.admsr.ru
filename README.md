@@ -120,7 +120,7 @@ sudo chown www-data:www-data /var/lib/crm-schedule
 
 ### Участники с CRM (без открытия MySQL)
 
-На **30.42** выложите `crm_participants.php` (рядом с `config.php`).  
+На **30.42** выложите `crm_participants.php` и **`crm_send_mail.php`** (рядом с `config.php`).  
 На CRM в php-fpm задайте `CRM_LOOKUP_SECRET` — тот же, что `CRM_SYNC_SECRET` на grafic.
 
 Проверка с **corporate-testing** (4.21):
@@ -253,6 +253,8 @@ sudo systemctl restart grafic-api
 | Белая страница | `pnpm build`, проверить `dist/index.html` и nginx `root` |
 | Не пускает в график | Проверить `JWT_SECRET`, логин seed, `journalctl -u grafic-api` |
 | `Invalid environment (production)` в journal | В `server/.env`: свой `SEED_USER_PASSWORD` (не `admin`), `JWT_SECRET` ≥32 символа (не dev-only-…) |
+| Почта: `spawn sendmail ENOENT` | В `server/.env`: `MAIL_TRANSPORT=crm`, выложить `crm_send_mail.php` на CRM, перезапуск API |
+| Почта не приходит | `curl` к `crm_send_mail.php`, `journalctl -u grafic-api \| grep crm mail` |
 
 ---
 

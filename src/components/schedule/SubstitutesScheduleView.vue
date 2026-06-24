@@ -96,8 +96,8 @@ const substituteSlug = computed(() =>
 
 const scheduleGridTemplate = computed(() =>
   isScheduleGeneralView.value
-    ? 'minmax(4.5rem, 5rem) minmax(10rem, 13rem) minmax(12rem, 16rem) minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(7rem, 9rem)'
-    : 'minmax(4.5rem, 5rem) minmax(12rem, 16rem) minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(7rem, 9rem) minmax(2.75rem, 3.25rem)')
+    ? '77px 200px 256px 1fr 1fr 140px'
+    : '77px 256px 1fr 1fr 140px 52px')
 
 /** Объединение колонок «место … приложения» для скрытого мероприятия без доступа к деталям. */
 function hiddenEventDetailsGridColumn(generalView: boolean): string {
@@ -626,7 +626,7 @@ function cancelDeleteEvent() {
             <div
               v-for="col in boardColumns"
               :key="col.block.id"
-              class="flex h-fit w-[clamp(16rem,17.5vw,21rem)] shrink-0 flex-col self-start overflow-hidden rounded-2xl bg-elevated/50 ring-1 ring-default dark:bg-elevated/20"
+              class="flex h-fit w-[min(19rem,calc(100vw-2.5rem))] shrink-0 flex-col self-start overflow-hidden rounded-2xl bg-elevated/50 ring-1 ring-default dark:bg-elevated/20"
             >
               <div class="flex shrink-0 items-center gap-3 border-b border-default px-3.5 py-3 sm:px-4">
                 <div
@@ -800,7 +800,7 @@ function cancelDeleteEvent() {
         </div>
 
         <div v-else class="min-h-0 min-w-0 flex-1 overflow-auto rounded-t-lg border border-default bg-default">
-          <div class="w-full min-w-0">
+          <div :class="isScheduleGeneralView ? 'min-w-[1300px]' : 'min-w-[1160px]'">
             <div
               class="sticky top-0 z-20 grid rounded-t-lg border-b border-default bg-default text-sm font-medium text-default"
               :style="{ gridTemplateColumns: scheduleGridTemplate }">

@@ -22,7 +22,7 @@
 
 @layer base {
   html {
-    font-size: clamp(14px, calc(8px + 0.5vw), 18px);
+    font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }

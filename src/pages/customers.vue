@@ -239,7 +239,7 @@ const columns: TableColumn<ApiCrmUser>[] = [
       </div>
 
       <template v-else>
-        <UContainer class="flex min-w-0 w-full flex-col gap-4 py-4">
+        <UContainer class="flex flex-col gap-4 py-4">
           <div class="flex flex-wrap items-center gap-3 text-sm text-muted">
             <span>{{ t.total }} <strong class="text-default">{{ users.length }}</strong></span>
             <span>{{ t.activeN }} <strong class="text-default">{{ activeCount }}</strong></span>
@@ -259,7 +259,7 @@ const columns: TableColumn<ApiCrmUser>[] = [
             :loading="loading"
             class="shrink-0 cursor-pointer"
             :ui="{
-              base: 'table-fixed border-separate border-spacing-0 w-full min-w-0',
+              base: 'table-fixed border-separate border-spacing-0 min-w-[900px]',
               thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:cursor-pointer [&>tr]:hover:bg-elevated/40',
               th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',

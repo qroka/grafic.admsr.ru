@@ -166,7 +166,7 @@ watch(eventDetailOpen, (isOpen) => {
     </template>
 
     <template #body>
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <UInput
             v-model="searchQuery"

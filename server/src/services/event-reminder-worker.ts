@@ -38,11 +38,6 @@ function parseEventStart(event: EventRecord): Date | null {
   )
 }
 
-function participantIdsWithoutCreator(event: EventRecord): number[] {
-  const creatorId = event.creatorExternalId
-  return event.participantIds.filter(id => id !== creatorId)
-}
-
 function processReminders(now: Date, logger?: FastifyBaseLogger): void {
   const dates = [
     formatEventDate(now),
@@ -63,7 +58,7 @@ function processReminders(now: Date, logger?: FastifyBaseLogger): void {
     if (Math.abs(diff - REMINDER_WINDOW_MS) > REMINDER_TOLERANCE_MS)
       continue
 
-    const participants = participantIdsWithoutCreator(event)
+    const participants = event.participantIds
     const pending = participants.filter(
       id => !wasReminderSent(event.id, id),
     )

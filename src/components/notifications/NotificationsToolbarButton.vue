@@ -39,8 +39,8 @@ async function onOpen(notification: AppNotification) {
     >
       <UChip
         :show="unread > 0"
-        :text="unread > 99 ? '99+' : String(unread)"
-        size="3xl"
+        color="primary"
+        size="sm"
         inset
       >
         <UIcon name="i-lucide-bell" class="size-5" />

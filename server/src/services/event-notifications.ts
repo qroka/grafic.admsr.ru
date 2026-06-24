@@ -62,14 +62,12 @@ function notifyExternalUsers(
 export function notifyParticipantsAdded(
   event: EventRecord,
   addedExternalIds: number[],
-  actorUserId?: number | null,
 ): void {
   if (!addedExternalIds.length)
     return
 
   const when = eventWhenLabel(event)
   notifyExternalUsers(addedExternalIds, {
-    excludeUserId: actorUserId,
     type: 'event.added',
     title: 'Вас включили в мероприятие',
     body: `«${event.topic}»\n${when}`,
@@ -80,14 +78,12 @@ export function notifyParticipantsAdded(
 export function notifyParticipantsRemoved(
   event: EventRecord,
   removedExternalIds: number[],
-  actorUserId?: number | null,
 ): void {
   if (!removedExternalIds.length)
     return
 
   const when = eventWhenLabel(event)
   notifyExternalUsers(removedExternalIds, {
-    excludeUserId: actorUserId,
     type: 'event.removed',
     title: 'Вас исключили из мероприятия',
     body: `«${event.topic}»\n${when}`,
@@ -117,7 +113,6 @@ export function notifyEventUpdated(
   event: EventRecord,
   changes: EventLogChange[],
   participantExternalIds: number[],
-  actorUserId?: number | null,
 ): void {
   if (!participantExternalIds.length || !changes.length)
     return
@@ -125,7 +120,6 @@ export function notifyEventUpdated(
   const when = eventWhenLabel(event)
   const changesBody = formatChangesBody(changes)
   notifyExternalUsers(participantExternalIds, {
-    excludeUserId: actorUserId,
     type: 'event.updated',
     title: 'Изменения в мероприятии',
     body: `«${event.topic}»\n${when}\n\n${changesBody}`,

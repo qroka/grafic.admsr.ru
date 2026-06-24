@@ -229,11 +229,7 @@ export const eventsRoutes: FastifyPluginAsync = async app => {
         meta: createLog.meta,
       }, request.log)
 
-      notifyParticipantsAdded(
-        event,
-        event.participantIds.filter(id => id !== event.creatorExternalId),
-        actor?.userId,
-      )
+      notifyParticipantsAdded(event, event.participantIds)
 
       try {
         return reply.status(201).send({
@@ -310,17 +306,16 @@ export const eventsRoutes: FastifyPluginAsync = async app => {
         existing.participantIds,
         event.participantIds,
       )
-      notifyParticipantsAdded(event, participantDiff.added, actor?.userId)
-      notifyParticipantsRemoved(event, participantDiff.removed, actor?.userId)
+      notifyParticipantsAdded(event, participantDiff.added)
+      notifyParticipantsRemoved(event, participantDiff.removed)
 
-      const activeParticipants = event.participantIds.filter(
-        id => id !== event.creatorExternalId && existing.participantIds.includes(id),
+      const continuingParticipants = event.participantIds.filter(
+        id => existing.participantIds.includes(id),
       )
       notifyEventUpdated(
         event,
         updateLog.meta.changes,
-        activeParticipants,
-        actor?.userId,
+        continuingParticipants,
       )
 
       try {
@@ -375,7 +370,7 @@ export const eventsRoutes: FastifyPluginAsync = async app => {
 
       notifyEventCancelled(
         existing,
-        existing.participantIds.filter(pid => pid !== existing.creatorExternalId),
+        existing.participantIds,
         actor?.userId,
       )
 

@@ -3,8 +3,8 @@ import type { Env } from '../config/env.js'
 import { findUserById } from '../repositories/users.js'
 import type { NotificationRow } from '../types/notifications.js'
 import type { EventRecord } from '../types/events.js'
-import { parseEmailAddresses } from '../utils/parse-emails.js'
 import { buildMailConfig, sendPlainTextMail } from './mail.js'
+import { resolveNotificationEmails } from './resolve-notification-emails.js'
 
 let mailEnv: Env | null = null
 let mailLogger: Pick<FastifyBaseLogger, 'warn' | 'info'> | undefined
@@ -15,6 +15,11 @@ export function initNotificationMail(
 ): void {
   mailEnv = env
   mailLogger = logger
+  logger?.info({
+    mailEnabled: env.MAIL_ENABLED,
+    sendmailPath: env.MAIL_SENDMAIL_PATH,
+    blacklistCount: env.MAIL_BLACKLIST.split(/[,;]/).filter(s => s.trim()).length,
+  }, 'notification mail configured')
 }
 
 function appBaseUrl(env: Env): string {
@@ -24,13 +29,16 @@ function appBaseUrl(env: Env): string {
 function buildNotificationEmailText(
   env: Env,
   notification: NotificationRow,
-  event?: Pick<EventRecord, 'substituteSlug'> | null,
+  event?: Pick<EventRecord, 'id' | 'substituteSlug'> | null,
 ): string {
   const lines = [notification.body]
 
   if (event?.substituteSlug) {
     lines.push('')
-    lines.push(`График: ${appBaseUrl(env)}/${event.substituteSlug}`)
+    if (event.id)
+      lines.push(`Ссылка: ${appBaseUrl(env)}/${event.substituteSlug}`)
+    else
+      lines.push(`График: ${appBaseUrl(env)}/${event.substituteSlug}`)
   }
 
   lines.push('')
@@ -42,19 +50,28 @@ function buildNotificationEmailText(
 export async function deliverNotificationEmail(
   env: Env,
   notification: NotificationRow,
-  event?: Pick<EventRecord, 'substituteSlug'> | null,
+  event?: Pick<EventRecord, 'id' | 'substituteSlug'> | null,
 ): Promise<number> {
-  const user = findUserById(notification.userId)
-  if (!user)
-    return 0
-
-  const emails = parseEmailAddresses(user.email)
-  if (!emails.length)
-    return 0
-
   const config = buildMailConfig(env)
   if (!config.enabled)
     return 0
+
+  const user = findUserById(notification.userId)
+  if (!user) {
+    mailLogger?.warn({ userId: notification.userId }, 'notification email skipped: user not found')
+    return 0
+  }
+
+  const emails = await resolveNotificationEmails(env, user)
+  if (!emails.length) {
+    mailLogger?.warn({
+      userId: user.id,
+      login: user.login,
+      externalUserId: user.externalUserId,
+      localEmail: user.email,
+    }, 'notification email skipped: no recipient addresses')
+    return 0
+  }
 
   const subject = notification.title
   const text = buildNotificationEmailText(env, notification, event)
@@ -71,7 +88,7 @@ export async function deliverNotificationEmail(
 
 export function queueNotificationEmail(
   notification: NotificationRow,
-  event?: Pick<EventRecord, 'substituteSlug'> | null,
+  event?: Pick<EventRecord, 'id' | 'substituteSlug'> | null,
 ): void {
   if (!mailEnv?.MAIL_ENABLED)
     return

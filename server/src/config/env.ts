@@ -38,13 +38,13 @@ const envSchema = z.object({
   SCHEDULE_SSO_SECRET: z.string().optional(),
   /** Отправка уведомлений на почту (sendmail, как mail() в HelpDesk). */
   MAIL_ENABLED: z
-    .enum(['true', 'false'])
+    .string()
     .default('false')
-    .transform(v => v === 'true'),
+    .transform(v => ['true', '1', 'yes', 'on'].includes(v.trim().toLowerCase())),
   MAIL_FROM: z.string().email().default('postmaster@admsr.ru'),
   MAIL_REPLY_TO: z.string().email().default('postmaster@admsr.ru'),
   MAIL_SUBJECT_PREFIX: z.string().default('График заместителей'),
-  MAIL_BLACKLIST: z.string().default('eua@admsr.ru,kov@admsr.ru,ostrond@admsr.ru'),
+  MAIL_BLACKLIST: z.string().default(''),
   MAIL_SENDMAIL_PATH: z.string().default('/usr/sbin/sendmail'),
 })
 

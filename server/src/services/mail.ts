@@ -36,7 +36,7 @@ export async function sendPlainTextMail(
   to: string,
   subject: string,
   text: string,
-  logger?: Pick<FastifyBaseLogger, 'warn'>,
+  logger?: Pick<FastifyBaseLogger, 'warn' | 'info'>,
 ): Promise<boolean> {
   if (!config.enabled)
     return false
@@ -50,6 +50,7 @@ export async function sendPlainTextMail(
     ? `${config.subjectPrefix} / ${subject}`
     : subject
 
+  // Как mail() в CRM: From, Reply-To, charset в заголовках; sendmail -t -i читает To из письма.
   const message = [
     `From: ${config.from}`,
     `Reply-To: ${config.replyTo}`,
@@ -64,16 +65,39 @@ export async function sendPlainTextMail(
   ].join('\r\n')
 
   return new Promise((resolve) => {
-    const proc = spawn(config.sendmailPath, ['-i', '-f', config.from, recipient])
+    const proc = spawn(config.sendmailPath, ['-t', '-i'], {
+      stdio: ['pipe', 'ignore', 'pipe'],
+    })
+
+    let stderr = ''
+    proc.stderr.on('data', (chunk: Buffer | string) => {
+      stderr += String(chunk)
+    })
+
     proc.on('error', (err) => {
-      logger?.warn({ err, to: recipient }, 'mail send failed')
+      logger?.warn({ err, to: recipient, sendmail: config.sendmailPath }, 'mail send failed')
       resolve(false)
     })
+
     proc.on('close', (code) => {
-      if (code !== 0)
-        logger?.warn({ code, to: recipient }, 'sendmail exited with error')
-      resolve(code === 0)
+      if (code !== 0) {
+        logger?.warn({
+          code,
+          to: recipient,
+          sendmail: config.sendmailPath,
+          stderr: stderr.trim() || undefined,
+        }, 'sendmail exited with error')
+        resolve(false)
+        return
+      }
+      resolve(true)
     })
+
+    proc.stdin.on('error', (err) => {
+      logger?.warn({ err, to: recipient }, 'mail stdin failed')
+      resolve(false)
+    })
+
     proc.stdin.write(message, 'utf8')
     proc.stdin.end()
   })

@@ -1,20 +1,45 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** Разбирает u_email / users.email (может содержать несколько адресов через запятую). */
-export function parseEmailAddresses(raw: string | null | undefined): string[] {
-  if (!raw?.trim())
-    return []
+type EmailSource = string | null | undefined | EmailSource[]
 
-  const seen = new Set<string>()
-  const result: string[] = []
+function trimEmailToken(part: string): string {
+  return part.trim().replace(/^[<>"']+|[<>"']+$/g, '').toLowerCase()
+}
 
-  for (const part of raw.split(/[,;]/)) {
-    const email = part.trim().toLowerCase()
-    if (!email || !EMAIL_RE.test(email) || seen.has(email))
+/** Как mail_collect_emails() в CRM: несколько полей, разделители , ; и пробелы. */
+export function collectEmailAddresses(sources: EmailSource): string[] {
+  const emails: string[] = []
+  const queue: EmailSource[] = [sources]
+
+  while (queue.length) {
+    const source = queue.shift()
+    if (source == null)
       continue
-    seen.add(email)
-    result.push(email)
+
+    if (Array.isArray(source)) {
+      queue.push(...source)
+      continue
+    }
+
+    const raw = String(source)
+    if (!raw.trim())
+      continue
+
+    const normalized = raw.replace(/[\r\n\t]/g, ' ')
+    const parts = normalized.split(/[,;\s]+/)
+
+    for (const part of parts) {
+      const email = trimEmailToken(part)
+      if (!email || !EMAIL_RE.test(email) || emails.includes(email))
+        continue
+      emails.push(email)
+    }
   }
 
-  return result
+  return emails
+}
+
+/** @deprecated используйте collectEmailAddresses */
+export function parseEmailAddresses(raw: string | null | undefined): string[] {
+  return collectEmailAddresses(raw)
 }

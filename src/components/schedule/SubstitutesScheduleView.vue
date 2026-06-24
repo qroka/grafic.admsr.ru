@@ -10,6 +10,7 @@ import {
   scheduleTitleOptions,
 } from '../../config/schedule'
 import { useParticipants } from '../../composables/useParticipants'
+import { useDragScroll } from '../../composables/useDragScroll'
 import { usePermissions } from '../../composables/usePermissions'
 import { useScheduleApi } from '../../composables/useScheduleApi'
 import type {
@@ -249,6 +250,13 @@ const viewTabs = [
   { label: 'Доска', value: 'board', icon: 'i-lucide-calendar-fold' }
 ]
 
+const boardScrollRef = ref<HTMLElement | null>(null)
+const {
+  isDragging: isBoardScrollDragging,
+  suppressClick: suppressBoardClick,
+  onMouseDown: onBoardScrollMouseDown,
+} = useDragScroll(boardScrollRef)
+
 const eventDetailOpen = ref(false)
 const eventSlideoverEditable = ref(false)
 const eventSlideoverCreateMode = ref(false)
@@ -399,6 +407,8 @@ function onScheduleRowActivate(block: ScheduleDateBlock, group: ScheduleUserGrou
 }
 
 function onBoardCardActivate(card: ScheduleBoardCard) {
+  if (suppressBoardClick.value)
+    return
   onScheduleRowActivate(card.block, card.group, card.row)
 }
 
@@ -607,11 +617,16 @@ function cancelDeleteEvent() {
         </UEmpty>
 
         <div v-else-if="view === 'board'" class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div class="flex min-h-0 flex-1 items-stretch gap-3 overflow-x-auto overflow-y-hidden p-px pb-2 sm:gap-4">
+          <div
+            ref="boardScrollRef"
+            class="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-auto p-px pb-2 sm:gap-4"
+            :class="isBoardScrollDragging ? 'cursor-grabbing select-none' : 'cursor-grab'"
+            @mousedown="onBoardScrollMouseDown"
+          >
             <div
               v-for="col in boardColumns"
               :key="col.block.id"
-              class="flex w-[min(19rem,calc(100vw-2.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl bg-elevated/50 ring-1 ring-default dark:bg-elevated/20"
+              class="flex h-fit w-[min(19rem,calc(100vw-2.5rem))] shrink-0 flex-col self-start overflow-hidden rounded-2xl bg-elevated/50 ring-1 ring-default dark:bg-elevated/20"
             >
               <div class="flex shrink-0 items-center gap-3 border-b border-default px-3.5 py-3 sm:px-4">
                 <div
@@ -655,7 +670,7 @@ function cancelDeleteEvent() {
                 />
               </div>
 
-              <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div class="flex flex-col">
                 <UEmpty
                   v-if="!col.cards.length"
                   size="sm"

@@ -21,10 +21,9 @@
 }
 
 @layer base {
-  /* Крупный экран + системный масштаб Windows/macOS 100% (не 125%, 150% и т.д.) */
   @media (min-width: 1921px) {
     html {
-      font-size: 110%;
+      font-size: 100%;
     }
   }
 

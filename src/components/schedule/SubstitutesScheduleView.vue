@@ -683,7 +683,7 @@ function cancelDeleteEvent() {
                 <template v-for="c in col.cards" :key="c.cardKey">
                   <div
                     :class="[
-                      'group border-y border-default p-3.5 py-2',
+                      'group border-t border-default p-3.5 py-2',
                       accentSurfaceClass(c.group.accent),
                       'cursor-pointer hover:-translate-y-px hover:border-primary/20 hover:bg-elevated/40 hover:shadow-sm',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',

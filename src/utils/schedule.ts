@@ -336,9 +336,6 @@ export function collectScheduleParticipants(blocks: ScheduleDateBlock[]): Schedu
       for (const row of group.rows) {
         for (const participant of row.participants)
           byKey.set(scheduleParticipantKey(participant), participant)
-        const creator = row.detail?.creator
-        if (creator)
-          byKey.set(scheduleParticipantKey(creator), creator)
       }
     }
   }
@@ -375,8 +372,6 @@ export function scheduleRowMatchesFilters(
     const rowParticipantKeys = new Set(
       row.participants.map(scheduleParticipantKey),
     )
-    if (row.detail?.creator)
-      rowParticipantKeys.add(scheduleParticipantKey(row.detail.creator))
     if (!participantKeys.some(key => rowParticipantKeys.has(key)))
       return false
   }

@@ -742,7 +742,6 @@ function cancelDeleteEvent() {
                     <ScheduleHiddenEventLabel
                       v-if="isScheduleRowViewRestricted(c.row)"
                       size="sm"
-                      class="py-1"
                     />
                     <template v-else>
                       <p class="line-clamp-3 text-sm font-semibold leading-snug text-highlighted">

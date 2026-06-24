@@ -23,7 +23,12 @@
 @layer base {
   @media (min-width: 1921px) {
     html {
-      font-size: 100%;
+      font-size: 110%;
+    }
+  }
+  @media (min-width: 2561px) {
+    html {
+      font-size: 125%;
     }
   }
 

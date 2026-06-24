@@ -6,8 +6,11 @@ meta:
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useHead } from '@unhead/vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+
+useHead({ title: 'Авторизация' })
 
 const router = useRouter()
 const { login } = useAuth()

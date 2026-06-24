@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
-import { useHead } from '@unhead/vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import {
@@ -221,15 +220,6 @@ function accentSurfaceClass(accent: ScheduleUserGroup['accent']) {
   }
   return map[accent]
 }
-
-const pageTitle = computed(() =>
-  scope.value === 'general'
-    ? 'График заместителей — общий'
-    : scheduleNavbarHeading(scope.value))
-
-useHead({
-  title: pageTitle
-})
 
 const titleMenuItems = computed<DropdownMenuItem[][]>(() => [
   scheduleTitleOptions.map(opt => ({

@@ -5,7 +5,6 @@ meta:
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useHead } from '@unhead/vue'
 import type { TabsItem } from '@nuxt/ui'
 import { fetchEventById } from '../api/events'
 import { buildScheduleEventSelection } from '../api/schedule-mapper'
@@ -23,8 +22,6 @@ import type {
 } from '../types/schedule'
 import { activityLogScopeLabel, resolveLogActorParticipant } from '../utils/logs'
 import { createScheduleDateBlocks } from '../utils/schedule'
-
-useHead({ title: 'Журнал событий' })
 
 const toast = useToast()
 const { canEditSubstituteSlug } = usePermissions()
@@ -135,13 +132,27 @@ watch(eventDetailOpen, (isOpen) => {
 </script>
 
 <template>
-  <UDashboardPanel id="activity-logs">
+  <UDashboardPanel
+    id="activity-logs"
+    :ui="{
+      root: 'flex min-h-0 min-w-0 flex-1 flex-col',
+      body: 'flex min-h-0 flex-1 flex-col overflow-hidden px-6 sm:px-6 pt-6 sm:pt-6 pb-0 sm:pb-0',
+    }"
+  >
     <template #header>
-      <UDashboardNavbar title="Журнал событий">
+      <UDashboardNavbar title="Журнал событий" :ui="{ right: 'gap-3' }">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
         <template #right>
+          <UTabs
+            v-model="logScope"
+            :items="scopeTabs"
+            :content="false"
+            size="lg"
+            color="neutral"
+            class="w-full max-w-[calc(100vw-12rem)] sm:max-w-md"
+          />
           <UButton
             icon="i-lucide-refresh-cw"
             color="neutral"
@@ -155,59 +166,45 @@ watch(eventDetailOpen, (isOpen) => {
     </template>
 
     <template #body>
-      <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
-        <div class="shrink-0 space-y-4">
-          <p class="text-sm text-muted">
-            История входов, изменений мероприятий и системных действий.
-          </p>
-
-          <UTabs
-            v-model="logScope"
-            :items="scopeTabs"
-            :content="false"
-            color="neutral"
-            class="w-full max-w-md"
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <UInput
+            v-model="searchQuery"
+            icon="i-lucide-search"
+            placeholder="Поиск по сообщению, пользователю, IP…"
+            size="lg"
+            class="min-w-0 flex-1"
           />
 
-          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <UInput
-              v-model="searchQuery"
-              icon="i-lucide-search"
-              placeholder="Поиск по сообщению, пользователю, IP…"
-              size="lg"
-              class="min-w-0 flex-1"
-            />
+          <USelect
+            :model-value="levelFilter"
+            :items="[...levelOptions]"
+            value-key="value"
+            label-key="label"
+            size="lg"
+            class="w-full sm:w-56"
+            @update:model-value="onLevelChange"
+          />
 
-            <USelect
-              :model-value="levelFilter"
-              :items="[...levelOptions]"
-              value-key="value"
-              label-key="label"
-              size="lg"
-              class="w-full sm:w-56"
-              @update:model-value="onLevelChange"
-            />
-
-            <UButton
-              v-if="hasActiveFilters"
-              label="Сбросить"
-              icon="i-lucide-filter-x"
-              color="neutral"
-              variant="outline"
-              size="lg"
-              @click="resetFilters()"
-            />
-          </div>
-
-          <UAlert
-            v-if="error"
-            color="error"
-            variant="subtle"
-            icon="i-lucide-circle-alert"
-            title="Не удалось загрузить журнал"
-            :description="error"
+          <UButton
+            v-if="hasActiveFilters"
+            label="Сбросить"
+            icon="i-lucide-filter-x"
+            color="neutral"
+            variant="outline"
+            size="lg"
+            @click="resetFilters()"
           />
         </div>
+
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-circle-alert"
+          title="Не удалось загрузить журнал"
+          :description="error"
+        />
 
         <div
           v-if="loading && !items.length"
@@ -223,7 +220,7 @@ watch(eventDetailOpen, (isOpen) => {
 
         <UEmpty
           v-else-if="!loading && !items.length"
-          class="py-12"
+          class="flex-1 py-12"
           icon="i-lucide-scroll-text"
           title="Записей пока нет"
           :description="hasActiveFilters
@@ -233,9 +230,9 @@ watch(eventDetailOpen, (isOpen) => {
 
         <div
           v-else
-          class="min-h-0 flex-1 overflow-y-auto p-px"
+          class="min-h-0 min-w-0 flex-1 overflow-y-auto p-px pb-2"
         >
-          <div class="space-y-3 pb-1">
+          <div class="space-y-3">
             <ActivityLogEntryCard
               v-for="entry in items"
               :key="entry.id"
@@ -248,7 +245,7 @@ watch(eventDetailOpen, (isOpen) => {
 
         <div
           v-if="total > pageSize"
-          class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-default pt-4"
+          class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-default py-4"
         >
           <p class="text-sm text-muted tabular-nums">
             {{ pageRangeLabel }}

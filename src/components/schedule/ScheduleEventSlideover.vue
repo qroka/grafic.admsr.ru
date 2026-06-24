@@ -441,7 +441,7 @@ function onCancelEdit() {
             />
             <UAlert
               v-if="draft.hidden"
-              color="warning"
+              color="primary"
               variant="subtle"
               icon="i-lucide-info"
               title="Мероприятие будет скрыто"

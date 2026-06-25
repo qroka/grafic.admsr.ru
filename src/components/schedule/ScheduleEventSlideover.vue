@@ -343,8 +343,8 @@ function onCancelEdit() {
           class="flex flex-col gap-4"
         >
           <ScheduleHiddenEventLabel />
-          <div class="grid grid-cols-2 gap-4 sm:max-w-sm">
-            <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+          <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-stretch">
+            <UCard variant="subtle" class="w-full shrink-0 sm:w-64" :ui="{ body: 'p-3 sm:p-4' }">
               <p class="text-xs text-dimmed">
                 Дата
               </p>
@@ -352,7 +352,7 @@ function onCancelEdit() {
                 {{ draft.date || '—' }}
               </p>
             </UCard>
-            <UCard variant="subtle" :ui="{ body: 'p-3 sm:p-4' }">
+            <UCard variant="subtle" class="min-w-0 flex-1" :ui="{ body: 'p-3 sm:p-4' }">
               <p class="text-xs text-dimmed">
                 Время
               </p>

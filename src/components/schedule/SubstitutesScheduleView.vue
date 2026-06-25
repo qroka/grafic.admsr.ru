@@ -660,7 +660,7 @@ function cancelDeleteEvent() {
             <div
               v-for="col in boardColumns"
               :key="col.block.id"
-              class="flex h-fit w-[min(19rem,calc(100vw-2.5rem))] shrink-0 flex-col self-start overflow-hidden rounded-2xl bg-elevated/50 ring-1 ring-default dark:bg-elevated/20"
+              class="flex h-fit w-[min(19rem,calc(100vw-2.5rem))] shrink-0 flex-col self-start overflow-hidden rounded-lg border border-default bg-elevated/50 dark:bg-elevated/20"
             >
               <div class="flex shrink-0 items-center gap-3 border-b border-default px-3.5 py-3 sm:px-4">
                 <div

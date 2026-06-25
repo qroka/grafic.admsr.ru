@@ -158,19 +158,20 @@ export const authRoutes: FastifyPluginAsync = async app => {
     },
   )
 
-  app.post(
-    '/auth/logout',
-    { preHandler: [app.authenticate] },
-    async (request, reply) => {
+  app.post('/auth/logout', async (request, reply) => {
+    try {
+      await request.jwtVerify()
       const jwtUser = request.user as AuthUserPayload
       if (jwtUser.jti) {
         const exp = jwtUser.exp ?? Math.floor(Date.now() / 1000) + 8 * 60 * 60
         revokeJwt(jwtUser.jti, exp)
       }
-      clearAuthCookie(reply, app.config.env)
-      return { success: true }
-    },
-  )
+    } catch {
+      // токен мог истечь — всё равно сбрасываем cookie
+    }
+    clearAuthCookie(reply, app.config.env)
+    return { success: true }
+  })
 
   /** SSO из CRM: одноразовый токен из schedule.php (#sso=...). */
   app.post('/auth/crm-sso', async (request, reply) => {

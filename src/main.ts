@@ -9,7 +9,7 @@ import { createHead } from '@unhead/vue/client'
 import ui from '@nuxt/ui/vue-plugin'
 
 import App from './App.vue'
-import { clearLegacyAuthToken } from './api/client'
+import { clearLegacyAuthToken, setUnauthorizedHandler } from './api/client'
 import { useAuth } from './composables/useAuth'
 import { consumeSsoTokenFromUrl, stripSsoFromUrl } from './utils/crm-sso'
 
@@ -32,6 +32,17 @@ const head = createHead()
 const router = createRouter({
   routes: setupLayouts(routes as RouteRecordRaw[]),
   history: createWebHistory(import.meta.env.BASE_URL),
+})
+
+setUnauthorizedHandler(() => {
+  const { clearSession } = useAuth()
+  clearSession()
+  if (router.currentRoute.value.path !== '/login') {
+    void router.replace({
+      path: '/login',
+      query: { redirect: router.currentRoute.value.fullPath },
+    })
+  }
 })
 
 router.beforeEach(async (to) => {

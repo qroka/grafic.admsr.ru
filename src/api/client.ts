@@ -29,6 +29,25 @@ export function clearLegacyAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+type UnauthorizedHandler = () => void
+
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler
+}
+
+function shouldNotifyUnauthorized(path: string): boolean {
+  if (path === '/api/auth/me')
+    return false
+  if (path.startsWith('/api/auth/login')
+    || path.startsWith('/api/auth/crm-')
+    || path === '/api/auth/logout') {
+    return false
+  }
+  return true
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -53,6 +72,9 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && shouldNotifyUnauthorized(path))
+      unauthorizedHandler?.()
+
     const err = data as { error?: string } | null
     throw new ApiError(err?.error ?? response.statusText, response.status, data)
   }

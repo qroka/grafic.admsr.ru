@@ -101,9 +101,9 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
 }], [{
   label: 'Выход',
   icon: 'i-lucide-log-out',
-  onSelect() {
-    logout()
-    void router.push('/login')
+  async onSelect() {
+    await logout()
+    await router.replace('/login')
   },
 }]]))
 </script>

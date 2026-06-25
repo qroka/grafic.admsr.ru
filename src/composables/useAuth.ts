@@ -4,24 +4,39 @@ import type { ApiLoginResponse, ApiUser } from '../api/types'
 
 const user = ref<ApiUser | null>(null)
 const ready = ref(false)
+let fetchMePromise: Promise<ApiUser | null> | null = null
 
 export function useAuth() {
   const isAuthenticated = computed(() => Boolean(user.value))
   const canViewLogs = computed(() => user.value?.role === 'admin')
 
+  function clearSession(): void {
+    user.value = null
+    ready.value = true
+    clearLegacyAuthToken()
+  }
+
   async function fetchMe(): Promise<ApiUser | null> {
-    try {
-      const res = await apiFetch<{ success: boolean, user?: ApiUser }>('/api/auth/me')
-      user.value = res.user ?? null
-      if (res.user)
-        clearLegacyAuthToken()
-      return user.value
-    } catch {
-      user.value = null
-      return null
-    } finally {
-      ready.value = true
-    }
+    if (fetchMePromise)
+      return fetchMePromise
+
+    fetchMePromise = (async () => {
+      try {
+        const res = await apiFetch<{ success: boolean, user?: ApiUser }>('/api/auth/me')
+        user.value = res.user ?? null
+        if (res.user)
+          clearLegacyAuthToken()
+        return user.value
+      } catch {
+        user.value = null
+        return null
+      } finally {
+        ready.value = true
+        fetchMePromise = null
+      }
+    })()
+
+    return fetchMePromise
   }
 
   async function login(loginName: string, password: string): Promise<void> {
@@ -64,14 +79,12 @@ export function useAuth() {
   }
 
   async function logout(): Promise<void> {
+    clearSession()
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' })
     } catch {
       // cookie могла уже истечь
     }
-    clearLegacyAuthToken()
-    user.value = null
-    ready.value = true
   }
 
   return {
@@ -79,6 +92,7 @@ export function useAuth() {
     ready,
     isAuthenticated,
     canViewLogs,
+    clearSession,
     fetchMe,
     login,
     loginWithCrmSso,

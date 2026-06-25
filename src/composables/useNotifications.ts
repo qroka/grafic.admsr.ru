@@ -11,7 +11,7 @@ import { useAuth } from './useAuth'
 const POLL_MS = 15_000
 
 export function useNotifications() {
-  const { ready, fetchMe } = useAuth()
+  const { ready, fetchMe, user } = useAuth()
 
   const loading = ref(false)
   const items = ref<AppNotification[]>([])
@@ -22,7 +22,7 @@ export function useNotifications() {
   async function load() {
     if (!ready.value)
       await fetchMe()
-    if (!ready.value)
+    if (!ready.value || !user.value)
       return
 
     loading.value = true

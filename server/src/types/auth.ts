@@ -7,6 +7,9 @@ export interface AuthUserPayload {
   name: string
   email?: string
   role: UserRole
+  jti: string
+  authEpoch: number
+  exp?: number
 }
 
 export interface LoginBody {

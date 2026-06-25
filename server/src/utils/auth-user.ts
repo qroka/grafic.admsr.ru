@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { findUserById } from '../repositories/users.js'
 import type { AuthUserPayload } from '../types/auth.js'
+import {
+  getUserAuthEpoch,
+  isJwtRevoked,
+} from '../services/jwt-revocation-store.js'
 
 export function syncUserFromDb(
   request: FastifyRequest,
@@ -13,6 +17,11 @@ export function syncUserFromDb(
   if (!dbUser)
     return null
 
+  const authEpoch = getUserAuthEpoch(dbUser.id)
+  const tokenEpoch = jwtUser.authEpoch ?? 0
+  if (tokenEpoch !== authEpoch)
+    return null
+
   const fresh: AuthUserPayload = {
     sub: String(dbUser.id),
     userId: dbUser.id,
@@ -20,6 +29,9 @@ export function syncUserFromDb(
     name: dbUser.name,
     email: dbUser.email ?? undefined,
     role: dbUser.role,
+    jti: jwtUser.jti,
+    authEpoch,
+    exp: jwtUser.exp,
   }
   request.user = fresh
   return fresh
@@ -32,6 +44,12 @@ export async function requireAuthenticatedUser(
   try {
     await request.jwtVerify()
   } catch {
+    reply.status(401).send({ success: false, error: 'Unauthorized' })
+    return undefined
+  }
+
+  const jwtUser = request.user as AuthUserPayload
+  if (jwtUser.jti && isJwtRevoked(jwtUser.jti)) {
     reply.status(401).send({ success: false, error: 'Unauthorized' })
     return undefined
   }

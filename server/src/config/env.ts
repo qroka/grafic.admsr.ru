@@ -74,7 +74,9 @@ function finalizeEnv(data: RawEnv): Env {
   }
 }
 
-function validateProductionSecrets(data: z.infer<typeof envSchema>): void {
+import { validateCorsOrigins } from '../utils/cors-origins.js'
+
+function validateProductionSecrets(data: RawEnv): void {
   if (data.NODE_ENV !== 'production')
     return
 
@@ -106,5 +108,7 @@ export function loadEnv(): Env {
   }
 
   validateProductionSecrets(parsed.data)
-  return finalizeEnv(parsed.data)
+  const env = finalizeEnv(parsed.data)
+  validateCorsOrigins(env)
+  return env
 }

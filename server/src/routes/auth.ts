@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
   verifyCredentials,
@@ -15,6 +16,7 @@ import {
   verifyCrmSsoToken,
 } from '../services/crm-auth.js'
 import { consumeSsoTokenOnce } from '../services/sso-token-store.js'
+import { getUserAuthEpoch, revokeJwt } from '../services/jwt-revocation-store.js'
 import { clearAuthCookie, setAuthCookie } from '../utils/auth-cookie.js'
 import { canUseLocalAuth, isCrmAuthRequired } from '../utils/local-auth-policy.js'
 
@@ -50,6 +52,8 @@ function toJwtPayload(user: LocalUser): AuthUserPayload {
     name: user.name,
     email: user.email ?? undefined,
     role: user.role,
+    jti: randomUUID(),
+    authEpoch: getUserAuthEpoch(user.id),
   }
 }
 
@@ -87,7 +91,6 @@ export const authRoutes: FastifyPluginAsync = async app => {
       return reply.status(400).send({
         success: false,
         error: 'Invalid request body',
-        details: parsed.error.flatten(),
       })
     }
 
@@ -158,7 +161,12 @@ export const authRoutes: FastifyPluginAsync = async app => {
   app.post(
     '/auth/logout',
     { preHandler: [app.authenticate] },
-    async (_request, reply) => {
+    async (request, reply) => {
+      const jwtUser = request.user as AuthUserPayload
+      if (jwtUser.jti) {
+        const exp = jwtUser.exp ?? Math.floor(Date.now() / 1000) + 8 * 60 * 60
+        revokeJwt(jwtUser.jti, exp)
+      }
       clearAuthCookie(reply, app.config.env)
       return { success: true }
     },

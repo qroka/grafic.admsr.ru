@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
+import helmet from '@fastify/helmet'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
 import type { Env } from './config/env.js'
@@ -22,6 +23,7 @@ import {
   syncUserFromDb,
 } from './utils/auth-user.js'
 import { AUTH_COOKIE_NAME } from './utils/auth-cookie.js'
+import { parseCorsOrigins } from './utils/cors-origins.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -44,13 +46,19 @@ export async function buildApp(env: Env) {
 
   const app = Fastify({
     logger: env.NODE_ENV === 'development',
+    trustProxy: env.NODE_ENV === 'production' ? '127.0.0.1' : false,
   })
 
   initNotificationMail(env, app.log)
   app.decorate('config', { env })
 
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: parseCorsOrigins(env.CORS_ORIGIN),
     credentials: true,
   })
 

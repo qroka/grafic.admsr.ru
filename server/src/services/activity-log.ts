@@ -25,15 +25,13 @@ export interface LogActivityInput {
 }
 
 export function getRequestIp(request: FastifyRequest): string | undefined {
-  const forwarded = request.headers['x-forwarded-for']
-  if (typeof forwarded === 'string') {
-    const first = forwarded.split(',')[0]?.trim()
-    return first || undefined
+  const realIp = request.headers['x-real-ip']
+  if (typeof realIp === 'string') {
+    const trimmed = realIp.trim()
+    if (trimmed)
+      return trimmed
   }
-  if (Array.isArray(forwarded)) {
-    const first = forwarded[0]?.split(',')[0]?.trim()
-    return first || undefined
-  }
+
   return request.ip
 }
 

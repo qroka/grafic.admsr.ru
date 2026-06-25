@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { CRM_PERMISSION_MODULES } from '../constants/crm-user-fields.js'
 import { CrmDbWriteDisabledError } from '../services/crm-db-policy.js'
 import { CrmUsersService } from '../services/crm-users.js'
+import { logRouteError } from '../utils/route-errors.js'
 
 const permissionSchema = z.object({
   headOrders: z.number().int().min(0).max(2).optional(),
@@ -93,8 +94,8 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         const users = await crmUsers.list(parsed.data.q)
         return { success: true, users }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to list users'
-        return reply.status(502).send({ success: false, error: message })
+        logRouteError(request.log, error, 'crm-users list failed')
+        return reply.status(502).send({ success: false, error: 'Failed to list users' })
       }
     },
   )
@@ -115,8 +116,8 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         }
         return { success: true, user }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load user'
-        return reply.status(502).send({ success: false, error: message })
+        logRouteError(request.log, error, 'crm-users get failed')
+        return reply.status(502).send({ success: false, error: 'Failed to load user' })
       }
     },
   )
@@ -130,7 +131,6 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         return reply.status(400).send({
           success: false,
           error: 'Invalid body',
-          details: parsed.error.flatten(),
         })
       }
 
@@ -141,8 +141,8 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         if (error instanceof CrmDbWriteDisabledError) {
           return reply.status(403).send({ success: false, error: error.message })
         }
-        const message = error instanceof Error ? error.message : 'Failed to create user'
-        return reply.status(502).send({ success: false, error: message })
+        logRouteError(request.log, error, 'crm-users create failed')
+        return reply.status(502).send({ success: false, error: 'Failed to create user' })
       }
     },
   )
@@ -161,7 +161,6 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         return reply.status(400).send({
           success: false,
           error: 'Invalid body',
-          details: parsed.error.flatten(),
         })
       }
 
@@ -175,8 +174,8 @@ export const crmUsersRoutes: FastifyPluginAsync = async app => {
         if (error instanceof CrmDbWriteDisabledError) {
           return reply.status(403).send({ success: false, error: error.message })
         }
-        const message = error instanceof Error ? error.message : 'Failed to update user'
-        return reply.status(502).send({ success: false, error: message })
+        logRouteError(request.log, error, 'crm-users update failed')
+        return reply.status(502).send({ success: false, error: 'Failed to update user' })
       }
     },
   )

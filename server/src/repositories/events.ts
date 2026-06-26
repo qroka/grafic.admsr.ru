@@ -20,6 +20,7 @@ interface EventRow {
   place_address: string
   topic: string
   hidden: number
+  attachments_hidden: number
   completed: number
   created_at: string | null
   organizer_external_id: number | null
@@ -57,6 +58,7 @@ function mapEvent(row: EventRow): EventRecord {
     placeAddress: row.place_address,
     topic: row.topic,
     hidden: row.hidden === 1,
+    attachmentsHidden: row.attachments_hidden === 1,
     completed: row.completed === 1,
     createdAt: row.created_at,
     creatorExternalId: row.organizer_external_id,
@@ -127,9 +129,9 @@ export function createEvent(input: CreateEventInput): EventRecord {
     .prepare(
       `INSERT INTO events (
         substitute_slug, event_date, time, all_day,
-        place_label, place_address, topic, hidden, completed,
+        place_label, place_address, topic, hidden, attachments_hidden, completed,
         created_at, organizer_external_id, attachments_label, detail_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.substituteSlug,
@@ -140,6 +142,7 @@ export function createEvent(input: CreateEventInput): EventRecord {
       input.placeAddress ?? '',
       input.topic,
       input.hidden ? 1 : 0,
+      input.attachmentsHidden ? 1 : 0,
       input.completed ? 1 : 0,
       input.createdAt ?? new Date().toISOString(),
       input.creatorExternalId ?? null,
@@ -170,6 +173,7 @@ export function updateEvent(id: number, input: UpdateEventInput): EventRecord | 
       place_address = ?,
       topic = ?,
       hidden = ?,
+      attachments_hidden = ?,
       completed = ?,
       created_at = ?,
       organizer_external_id = ?,
@@ -184,6 +188,7 @@ export function updateEvent(id: number, input: UpdateEventInput): EventRecord | 
     input.placeAddress ?? existing.placeAddress,
     input.topic ?? existing.topic,
     (input.hidden ?? existing.hidden) ? 1 : 0,
+    (input.attachmentsHidden ?? existing.attachmentsHidden) ? 1 : 0,
     (input.completed ?? existing.completed) ? 1 : 0,
     input.createdAt ?? existing.createdAt,
     existing.creatorExternalId,

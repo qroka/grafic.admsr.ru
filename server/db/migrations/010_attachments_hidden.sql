@@ -1,0 +1,1 @@
+ALTER TABLE events ADD COLUMN attachments_hidden INTEGER NOT NULL DEFAULT 0;

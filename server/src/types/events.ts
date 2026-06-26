@@ -4,6 +4,8 @@ export interface EventAttachmentRow {
   sizeLabel: string
   mimeType: string
   hasFile: boolean
+  /** Имя и скачивание скрыты для пользователя без доступа. */
+  redacted?: boolean
 }
 
 export interface EventRecord {
@@ -16,6 +18,7 @@ export interface EventRecord {
   placeAddress: string
   topic: string
   hidden: boolean
+  attachmentsHidden: boolean
   completed: boolean
   createdAt: string | null
   /** CRM id создателя (колонка SQLite organizer_external_id). Не меняется после создания. */
@@ -35,6 +38,7 @@ export interface CreateEventInput {
   placeAddress?: string
   topic: string
   hidden?: boolean
+  attachmentsHidden?: boolean
   completed?: boolean
   createdAt?: string
   creatorExternalId?: number | null

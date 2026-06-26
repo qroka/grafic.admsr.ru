@@ -957,13 +957,15 @@ function cancelDeleteEvent() {
                           />
                         </div>
                         <div
-                          class="flex min-h-[100px] min-w-0 items-center justify-end border-r border-default p-4"
+                          class="flex min-h-[100px] min-w-0 items-center justify-center border-r border-default px-3 py-4"
                           @click.stop
                         >
                           <ScheduleAttachmentsPopover
                             v-if="entry.row.attachmentFiles.length"
+                            variant="table"
                             :files="entry.row.attachmentFiles"
                             :label="entry.row.attachmentsLabel"
+                            :row="entry.row"
                           />
                         </div>
                       </template>

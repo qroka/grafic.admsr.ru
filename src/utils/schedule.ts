@@ -1,6 +1,7 @@
 ﻿import { CalendarDate, getLocalTimeZone, today, type DateValue } from '@internationalized/date'
 import { isScheduleSubstituteSlug } from '../config/schedule'
 import type {
+  ScheduleAttachmentFile,
   ScheduleDateBlock,
   ScheduleDayBlockTitleParts,
   ScheduleDayEntry,
@@ -157,6 +158,7 @@ export function createEmptyScheduleRow(blockDate?: string): ScheduleRow {
     attachmentsLabel: '',
     attachmentFiles: [],
     hidden: false,
+    attachmentsHidden: false,
     detail: {
       date,
       allDay: false
@@ -174,6 +176,17 @@ export function scheduleParticipantKey(participant: ScheduleParticipant): string
 /** Скрытое мероприятие без доступа к деталям: в графике только время и плашка. */
 export function isScheduleRowViewRestricted(row: ScheduleRow): boolean {
   return Boolean(row.hidden && row.viewRestricted)
+}
+
+/** Скрытые файлы без доступа: в графике видно количество, содержимое недоступно. */
+export function isScheduleRowAttachmentsRestricted(row: ScheduleRow): boolean {
+  return Boolean(row.attachmentsHidden && row.attachmentsRestricted)
+}
+
+export function isScheduleAttachmentRedacted(file: ScheduleAttachmentFile, row?: ScheduleRow): boolean {
+  if (file.redacted)
+    return true
+  return row ? isScheduleRowAttachmentsRestricted(row) : false
 }
 
 /** Сокращённое ФИО для таблицы: «Иванов И.И.» (фамилия + инициалы). */

@@ -80,6 +80,7 @@ const draft = reactive({
   time: '',
   allDay: false,
   hidden: false,
+  attachmentsHidden: false,
   address: '',
   topic: '',
 })
@@ -164,6 +165,7 @@ function syncDraftFromSelection() {
   draft.date = r.detail?.date ?? bd ?? ''
   draft.allDay = r.detail?.allDay ?? false
   draft.hidden = r.hidden ?? false
+  draft.attachmentsHidden = r.attachmentsHidden ?? false
   selectedParticipantKeys.value = r.participants.map(scheduleParticipantKey)
   attachmentItems.value = r.attachmentFiles.map(f => ({ ...f }))
 }
@@ -264,6 +266,7 @@ function applyDraftToRow() {
     ensureScheduleRowDetailMeta(r, eventDate)
   }
   r.hidden = draft.hidden
+  r.attachmentsHidden = draft.attachmentsHidden
   r.attachmentFiles = attachmentItems.value.map(item => ({ ...item }))
   r.attachmentsLabel = formatAttachmentsLabel(r.attachmentFiles.length)
 }
@@ -420,7 +423,10 @@ function onCancelEdit() {
             <p class="mb-2 text-xs text-dimmed">
               Приложения
             </p>
-            <ScheduleAttachmentList :files="selection.row.attachmentFiles" />
+            <ScheduleAttachmentList
+              :files="selection.row.attachmentFiles"
+              :row="selection.row"
+            />
           </UCard>
         </div>
 
@@ -446,6 +452,20 @@ function onCancelEdit() {
               icon="i-lucide-info"
               title="Мероприятие будет скрыто"
               description="В общем графике другие пользователи увидят только дату и время, если у них нет доступа."
+            />
+            <USwitch
+              v-model="draft.attachmentsHidden"
+              :disabled="!editable"
+              label="Скрыть файлы"
+              description="Количество файлов останется в графике, но скачать их смогут только участники и редакторы"
+            />
+            <UAlert
+              v-if="draft.attachmentsHidden"
+              color="primary"
+              variant="subtle"
+              icon="i-lucide-lock"
+              title="Файлы будут скрыты"
+              description="Пользователи без доступа увидят количество вложений, но не смогут открыть или скачать файлы."
             />
           </UCard>
 
@@ -520,6 +540,7 @@ function onCancelEdit() {
               <ScheduleAttachmentList
                 v-if="!editable"
                 :files="selection.row.attachmentFiles"
+                :row="selection.row"
               />
               <div v-else class="flex flex-col gap-3">
             <ul v-if="attachmentItems.length" class="flex flex-col gap-2">

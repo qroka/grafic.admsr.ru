@@ -31,6 +31,7 @@ export interface ApiEventAttachment {
   sizeLabel: string
   mimeType?: string
   hasFile?: boolean
+  redacted?: boolean
 }
 
 export interface ApiEvent {
@@ -43,6 +44,7 @@ export interface ApiEvent {
   placeAddress: string
   topic: string
   hidden: boolean
+  attachmentsHidden: boolean
   completed: boolean
   createdAt: string | null
   creatorExternalId: number | null
@@ -55,6 +57,8 @@ export interface ApiEvent {
   creator?: ApiCrmParticipant | null
   /** Исполнитель: скрытое мероприятие — в графике только время. */
   viewRestricted?: boolean
+  /** Исполнитель: скрытые файлы — в графике только количество. */
+  attachmentsRestricted?: boolean
 }
 
 export interface ApiLoginResponse {

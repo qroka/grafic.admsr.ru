@@ -15,6 +15,22 @@ export function isEventParticipant(
   return event.creatorExternalId === id
 }
 
+/** Скрытые файлы без доступа: в графике видно количество, содержимое недоступно. */
+export function shouldRedactHiddenAttachments(
+  profile: UserAccessProfile,
+  event: Pick<EventRecord, 'attachmentsHidden' | 'substituteSlug' | 'participantIds' | 'creatorExternalId'>,
+): boolean {
+  if (!event.attachmentsHidden)
+    return false
+  if (profile.role === 'admin')
+    return false
+  if (canEditSubstituteSlug(profile, event.substituteSlug))
+    return false
+  if (isEventParticipant(profile, event))
+    return false
+  return true
+}
+
 export function canViewEvent(
   profile: UserAccessProfile,
   event: Pick<EventRecord, 'hidden' | 'participantIds' | 'creatorExternalId' | 'substituteSlug'>,

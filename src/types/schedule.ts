@@ -6,6 +6,8 @@ export interface ScheduleAttachmentFile {
   size: string
   /** Локальный файл до загрузки на сервер. */
   pendingFile?: File
+  /** Содержимое скрыто для текущего пользователя. */
+  redacted?: boolean
 }
 
 export interface ScheduleParticipant {
@@ -45,8 +47,11 @@ export interface ScheduleRow {
   attachmentsLabel: string
   attachmentFiles: ScheduleAttachmentFile[]
   hidden?: boolean
+  attachmentsHidden?: boolean
   /** Скрытое мероприятие для исполнителя — только время в списке. */
   viewRestricted?: boolean
+  /** Скрытые файлы для исполнителя — в списке только количество. */
+  attachmentsRestricted?: boolean
   detail?: ScheduleRowDetail
 }
 

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import type { UserAccessProfile } from '../types/auth.js'
 import {
   canViewEvent,
+  shouldRedactHiddenAttachments,
   shouldRedactHiddenEvent,
 } from './event-permissions.js'
 
@@ -22,6 +23,15 @@ function profile(overrides: Partial<UserAccessProfile> = {}): UserAccessProfile 
 
 const hiddenEvent = {
   hidden: true,
+  attachmentsHidden: false,
+  substituteSlug: 'markova',
+  participantIds: [200],
+  creatorExternalId: 300,
+}
+
+const hiddenAttachmentsEvent = {
+  hidden: false,
+  attachmentsHidden: true,
   substituteSlug: 'markova',
   participantIds: [200],
   creatorExternalId: 300,
@@ -53,6 +63,23 @@ describe('hidden event permissions', () => {
       editableSubstituteSlugs: ['markova'],
     })
     assert.equal(shouldRedactHiddenEvent(manager, hiddenEvent), false)
+  })
+})
+
+describe('hidden attachments permissions', () => {
+  it('shouldRedactHiddenAttachments hides files from unrelated user', () => {
+    assert.equal(shouldRedactHiddenAttachments(profile(), hiddenAttachmentsEvent), true)
+  })
+
+  it('participant sees hidden attachments', () => {
+    const participant = profile({ externalUserId: 200 })
+    assert.equal(shouldRedactHiddenAttachments(participant, hiddenAttachmentsEvent), false)
+  })
+
+  it('event details stay visible when only attachments are hidden', () => {
+    const viewer = profile()
+    assert.equal(shouldRedactHiddenEvent(viewer, hiddenAttachmentsEvent), false)
+    assert.equal(shouldRedactHiddenAttachments(viewer, hiddenAttachmentsEvent), true)
   })
 })
 

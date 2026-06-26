@@ -52,6 +52,7 @@ const createEventSchema = z.object({
   placeAddress: z.string().optional(),
   topic: z.string().min(1),
   hidden: z.boolean().optional(),
+  attachmentsHidden: z.boolean().optional(),
   completed: z.boolean().optional(),
   createdAt: z.string().optional(),
   creatorExternalId: z.number().int().positive().nullable().optional(),

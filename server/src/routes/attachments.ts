@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { findEventById } from '../repositories/events.js'
 import { resolveUserAccess } from '../utils/event-access.js'
-import { canEditEvent, canViewEvent, shouldRedactHiddenEvent } from '../services/event-permissions.js'
+import { canEditEvent, canViewEvent, shouldRedactHiddenAttachments, shouldRedactHiddenEvent } from '../services/event-permissions.js'
 import {
   addAttachmentFromUpload,
   deleteAttachment,
@@ -168,6 +168,9 @@ export const attachmentsRoutes: FastifyPluginAsync = async app => {
       if (shouldRedactHiddenEvent(profile, event)) {
         return reply.status(404).send({ success: false, error: 'File not found' })
       }
+      if (shouldRedactHiddenAttachments(profile, event)) {
+        return reply.status(404).send({ success: false, error: 'File not found' })
+      }
 
       const stream = openStoredFile(app.config.env, attachment.storageKey)
       if (!stream) {
@@ -206,6 +209,9 @@ export const attachmentsRoutes: FastifyPluginAsync = async app => {
           return reply.status(404).send({ success: false, error: 'Attachment not found' })
         }
         if (shouldRedactHiddenEvent(profile, event)) {
+          return reply.status(404).send({ success: false, error: 'Attachment not found' })
+        }
+        if (shouldRedactHiddenAttachments(profile, event)) {
           return reply.status(404).send({ success: false, error: 'Attachment not found' })
         }
         if (!canEditEvent(profile, event)) {

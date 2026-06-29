@@ -1161,7 +1161,7 @@ function cancelDeleteEvent() {
                       @keydown.enter.prevent="onScheduleRowActivate(block, entry.group, entry.row)"
                       @keydown.space.prevent="onScheduleRowActivate(block, entry.group, entry.row)">
                       <div
-                        class="flex min-h-[100px] flex-col items-center justify-center border-r border-default p-3 text-center text-default"
+                        class="flex min-h-[100px] flex-col items-center justify-center border-r border-default p-3 text-center text-sm text-default"
                       >
                         <span
                           class="tabular-nums"

@@ -14,7 +14,9 @@ import {
   parseDateFromScheduleBlockTitle,
   scheduleParticipantKey,
   isScheduleRowViewRestricted,
+  isScheduleRowAttachmentsHiddenForOthers,
   formatScheduleRowTime,
+  type SchedulePlaceQuickOption,
 } from '../../utils/schedule'
 import type {
   ScheduleAttachmentFile,
@@ -33,9 +35,13 @@ import ScheduleAttachmentList from './ScheduleAttachmentList.vue'
 import ScheduleDatePicker from './ScheduleDatePicker.vue'
 import ScheduleParticipantPopoverChip from './ScheduleParticipantPopoverChip.vue'
 import ScheduleParticipantsField from './ScheduleParticipantsField.vue'
+import SchedulePlaceField from './SchedulePlaceField.vue'
 import ScheduleTimePicker from './ScheduleTimePicker.vue'
 import ScheduleHiddenBadge from './ScheduleHiddenBadge.vue'
 import ScheduleHiddenEventLabel from './ScheduleHiddenEventLabel.vue'
+import ScheduleHiddenAttachmentsBadge from './ScheduleHiddenAttachmentsBadge.vue'
+import ScheduleHiddenAttachmentsNotice from './ScheduleHiddenAttachmentsNotice.vue'
+import ScheduleHiddenAttachmentsLabel from './ScheduleHiddenAttachmentsLabel.vue'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -51,10 +57,14 @@ const props = defineProps<{
   canEdit?: boolean
   /** Создание нового мероприятия (только персональный график заместителя). */
   isCreate?: boolean
+  /** Копирование существующего мероприятия. */
+  isCopy?: boolean
   /** Блоки дней графика для выбора даты при создании. */
   createDayBlocks?: ScheduleDateBlock[]
   /** Список участников для выбора в форме. */
   availableParticipants?: ScheduleParticipant[]
+  /** Частые места, рассчитанные по мероприятиям графика. */
+  placeQuickOptions?: SchedulePlaceQuickOption[]
 }>()
 
 const createDayBlockId = defineModel<string>('createDayBlockId')
@@ -64,13 +74,18 @@ const { user: authUser } = useAuth()
 const emit = defineEmits<{
   saved: []
   edit: []
+  copy: []
 }>()
 
 const editable = computed(() => Boolean(props.editable || props.isCreate))
 const isCreate = computed(() => Boolean(props.isCreate))
+const isCopy = computed(() => Boolean(props.isCopy))
 const isReadOnly = computed(() => Boolean(props.selection) && !editable.value && !isCreate.value)
 const viewRestricted = computed(() =>
   props.selection ? isScheduleRowViewRestricted(props.selection.row) : false,
+)
+const attachmentsHiddenForOthers = computed(() =>
+  props.selection ? isScheduleRowAttachmentsHiddenForOthers(props.selection.row) : false,
 )
 
 const d = computed(() => props.selection?.row.detail)
@@ -236,7 +251,7 @@ function validateEventForm(state: typeof draft): FormError[] {
   if (!state.allDay && !/^\d{1,2}:\d{2}$/.test(state.time.trim()))
     errors.push({ name: 'time', message: 'Укажите время' })
   if (!state.address.trim())
-    errors.push({ name: 'address', message: 'Укажите адрес проведения' })
+    errors.push({ name: 'address', message: 'Укажите место проведения' })
   if (!state.topic.trim())
     errors.push({ name: 'topic', message: 'Укажите тему мероприятия' })
   return errors
@@ -300,7 +315,7 @@ function onCancelEdit() {
           <p class="text-base font-semibold text-highlighted" role="heading" :aria-level="2">
             {{
               isCreate
-                ? 'Новое мероприятие'
+                ? (isCopy ? 'Копия мероприятия' : 'Новое мероприятие')
                 : editable
                   ? 'Редактирование мероприятия'
                   : 'Мероприятие'
@@ -309,6 +324,10 @@ function onCancelEdit() {
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
             <ScheduleHiddenBadge
               v-if="selection.row.hidden && !viewRestricted"
+              variant="badge"
+            />
+            <ScheduleHiddenAttachmentsBadge
+              v-if="attachmentsHiddenForOthers"
               variant="badge"
             />
             <span v-if="headerCreatedAt">{{ headerCreatedAt }}</span>
@@ -423,6 +442,16 @@ function onCancelEdit() {
             <p class="mb-2 text-xs text-dimmed">
               Приложения
             </p>
+            <ScheduleHiddenAttachmentsLabel
+              v-if="selection.row.attachmentsRestricted"
+              size="sm"
+              class="mb-3"
+            />
+            <ScheduleHiddenAttachmentsNotice
+              v-else-if="attachmentsHiddenForOthers"
+              size="sm"
+              class="mb-3"
+            />
             <ScheduleAttachmentList
               :files="selection.row.attachmentFiles"
               :row="selection.row"
@@ -438,6 +467,15 @@ function onCancelEdit() {
           class="flex flex-col gap-4"
           @submit="onFormSubmit"
         >
+          <UAlert
+            v-if="isCopy"
+            color="primary"
+            variant="subtle"
+            icon="i-lucide-copy"
+            title="Создание по образцу"
+            description="Тема, место и участники скопированы. Проверьте дату и время — по умолчанию выбрана следующая неделя. Файлы нужно прикрепить заново."
+          />
+
           <UCard variant="subtle" :ui="{ body: 'flex flex-col gap-3 p-3 sm:p-4' }">
             <USwitch
               v-model="draft.hidden"
@@ -500,14 +538,11 @@ function onCancelEdit() {
             <p class="text-xs font-medium tracking-wide text-dimmed uppercase">
               Описание
             </p>
-            <UFormField label="Адрес" name="address">
-              <UInput
+            <UFormField label="Место" name="address">
+              <SchedulePlaceField
                 v-model="draft.address"
                 :disabled="!editable"
-                variant="outline"
-                icon="i-lucide-map-pin"
-                placeholder="Укажите адрес проведения"
-                class="w-full"
+                :quick-options="placeQuickOptions"
               />
             </UFormField>
 
@@ -621,14 +656,26 @@ function onCancelEdit() {
     </template>
 
     <template v-if="selection && isReadOnly && canEdit" #footer>
-      <UButton
-        label="Редактировать"
-        icon="i-lucide-pencil"
-        color="primary"
-        size="lg"
-        block
-        @click="emit('edit')"
-      />
+      <div class="flex w-full gap-2">
+        <UButton
+          label="Копировать"
+          icon="i-lucide-copy"
+          color="neutral"
+          variant="outline"
+          size="lg"
+          class="shrink-0"
+          @click="emit('copy')"
+        />
+        <UButton
+          label="Редактировать"
+          icon="i-lucide-pencil"
+          color="primary"
+          size="lg"
+          block
+          class="min-w-0 flex-1"
+          @click="emit('edit')"
+        />
+      </div>
     </template>
 
     <template v-else-if="selection && (editable || isCreate)" #footer>
@@ -642,7 +689,7 @@ function onCancelEdit() {
           @click="onCancelEdit"
         />
         <UButton
-          :label="isCreate ? 'Создать' : 'Сохранить'"
+          :label="isCreate ? (isCopy ? 'Создать копию' : 'Создать') : 'Сохранить'"
           color="primary"
           class="w-full justify-center"
           size="lg"

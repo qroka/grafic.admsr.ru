@@ -80,6 +80,8 @@ export interface ScheduleDateBlock {
   title: string
   defaultOpen: boolean
   groups: ScheduleUserGroup[]
+  /** День в прошлом относительно сегодня. */
+  isArchive?: boolean
 }
 
 export interface ScheduleDayEntry {

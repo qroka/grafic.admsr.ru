@@ -7,6 +7,21 @@ import type {
   ScheduleUserGroup,
 } from '../types/schedule'
 import { scheduleSubstituteSlugs } from '../types/schedule'
+
+/** Ширина колонки «Приложения» в таблице — под бейдж «Скрытые файлы». */
+export const scheduleAttachmentsColumnWidth = '160px'
+
+/** Типовые форматы и места проведения совещаний. */
+export const schedulePlacePresets = [
+  { value: 'vks', label: 'ВКС', icon: 'i-lucide-monitor-play' as const },
+  { value: 'skype', label: 'Режим видеосовещания (Skype)', icon: 'i-lucide-video' as const },
+  { value: 'cab-223', label: 'каб. 223 (Маркова Ю.В.)', icon: 'i-lucide-door-open' as const },
+  { value: 'cab-104', label: 'каб. 104 (Нигматуллин М.Э.)', icon: 'i-lucide-door-open' as const },
+  { value: 'small-hall', label: 'Малый зал', icon: 'i-lucide-presentation' as const },
+  { value: 'cab-219', label: 'каб. 219', icon: 'i-lucide-door-open' as const },
+  { value: 'cab-203', label: 'каб. 203', icon: 'i-lucide-door-open' as const },
+] as const
+
 export function findSubstituteGroup(
   block: ScheduleDateBlock,
   slug: ScheduleSubstituteSlug,

@@ -1,17 +1,34 @@
 import { onScopeDispose, watchEffect, type Ref } from 'vue'
 
-function canScrollVertically(el: HTMLElement, deltaY: number): boolean {
+function isVerticallyScrollable(el: HTMLElement): boolean {
   const style = getComputedStyle(el)
   const overflowY = style.overflowY
   if (overflowY !== 'auto' && overflowY !== 'scroll' && overflowY !== 'overlay')
     return false
-  if (el.scrollHeight <= el.clientHeight)
+  return el.scrollHeight > el.clientHeight
+}
+
+function canScrollVertically(el: HTMLElement, deltaY: number): boolean {
+  if (!isVerticallyScrollable(el))
     return false
   if (deltaY < 0)
     return el.scrollTop > 0
   if (deltaY > 0)
     return el.scrollTop + el.clientHeight < el.scrollHeight
   return false
+}
+
+function findVerticalScrollContainer(
+  target: Element | null,
+  boundary: HTMLElement,
+): HTMLElement | null {
+  let node = target
+  while (node && node !== boundary) {
+    if (node instanceof HTMLElement && isVerticallyScrollable(node))
+      return node
+    node = node.parentElement
+  }
+  return null
 }
 
 /** Вертикальное колесо → горизонтальный скролл (как на канбан-доске). */
@@ -27,12 +44,15 @@ export function useWheelHorizontalScroll(container: Ref<HTMLElement | null>) {
     if (e.deltaY === 0)
       return
 
-    let node = e.target instanceof Element ? e.target : null
-    while (node && node !== el) {
-      if (node instanceof HTMLElement && canScrollVertically(node, e.deltaY)) {
+    const target = e.target instanceof Element ? e.target : null
+    const verticalScroller = findVerticalScrollContainer(target, el)
+
+    if (verticalScroller) {
+      if (canScrollVertically(verticalScroller, e.deltaY))
         return
-      }
-      node = node.parentElement
+      // Внутри колонки дня на границе — не отдаём скролл странице.
+      e.preventDefault()
+      return
     }
 
     const maxScrollLeft = el.scrollWidth - el.clientWidth

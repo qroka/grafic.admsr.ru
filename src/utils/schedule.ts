@@ -1,5 +1,5 @@
 ﻿import { CalendarDate, getLocalTimeZone, today, type DateValue } from '@internationalized/date'
-import { isScheduleSubstituteSlug } from '../config/schedule'
+import { isScheduleSubstituteSlug, schedulePlacePresets } from '../config/schedule'
 import type {
   ScheduleAttachmentFile,
   ScheduleDateBlock,
@@ -14,6 +14,109 @@ export type { ScheduleDayBlockTitleParts, ScheduleDayEntry } from '../types/sche
 /** Место одной строкой: населённый пункт и адрес через запятую. */
 export function formatSchedulePlace(row: Pick<ScheduleRow, 'placeLabel' | 'placeAddress'>): string {
   return [row.placeLabel.trim(), row.placeAddress.trim()].filter(Boolean).join(', ')
+}
+
+export { schedulePlacePresets } from '../config/schedule'
+
+export interface SchedulePlaceQuickOption {
+  key: string
+  label: string
+  icon: string
+  count?: number
+  fromPreset?: boolean
+}
+
+export function normalizeSchedulePlaceKey(place: string): string {
+  return place.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export function guessSchedulePlaceIcon(label: string): string {
+  const lower = label.toLowerCase()
+  if (lower.includes('вкс') || lower.includes('видео') || lower.includes('skype'))
+    return 'i-lucide-video'
+  if (lower.includes('зал'))
+    return 'i-lucide-presentation'
+  if (lower.includes('каб'))
+    return 'i-lucide-door-open'
+  return 'i-lucide-map-pin'
+}
+
+function collectSchedulePlaceUsage(
+  sources: Array<Pick<ScheduleRow, 'placeLabel' | 'placeAddress'>>,
+): Map<string, { label: string, count: number }> {
+  const variants = new Map<string, Map<string, number>>()
+
+  for (const source of sources) {
+    const label = formatSchedulePlace(source).trim().replace(/\s+/g, ' ')
+    if (!label)
+      continue
+    const key = normalizeSchedulePlaceKey(label)
+    const byLabel = variants.get(key) ?? new Map<string, number>()
+    byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
+    variants.set(key, byLabel)
+  }
+
+  const result = new Map<string, { label: string, count: number }>()
+  for (const [key, byLabel] of variants) {
+    let bestLabel = ''
+    let bestLabelCount = 0
+    let total = 0
+    for (const [label, count] of byLabel) {
+      total += count
+      if (count > bestLabelCount) {
+        bestLabelCount = count
+        bestLabel = label
+      }
+    }
+    result.set(key, { label: bestLabel, count: total })
+  }
+  return result
+}
+
+/** Частые места: пресеты + реально используемые варианты из мероприятий. */
+export function buildSchedulePlaceQuickOptions(
+  sources: Array<Pick<ScheduleRow, 'placeLabel' | 'placeAddress'>>,
+  options?: { extraLimit?: number, minExtraCount?: number },
+): SchedulePlaceQuickOption[] {
+  const extraLimit = options?.extraLimit ?? 8
+  const minExtraCount = options?.minExtraCount ?? 2
+  const usage = collectSchedulePlaceUsage(sources)
+  const presetKeys = new Set(
+    schedulePlacePresets.map(preset => normalizeSchedulePlaceKey(preset.label)),
+  )
+
+  const result: SchedulePlaceQuickOption[] = schedulePlacePresets.map((preset) => {
+    const stats = usage.get(normalizeSchedulePlaceKey(preset.label))
+    return {
+      key: preset.value,
+      label: preset.label,
+      icon: preset.icon,
+      count: stats?.count ?? 0,
+      fromPreset: true,
+    }
+  })
+
+  const extras = [...usage.entries()]
+    .filter(([key]) => !presetKeys.has(key))
+    .map(([, stats]) => stats)
+    .filter(stats => stats.count >= minExtraCount)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ru'))
+    .slice(0, extraLimit)
+
+  for (const stats of extras) {
+    result.push({
+      key: `usage-${normalizeSchedulePlaceKey(stats.label)}`,
+      label: stats.label,
+      icon: guessSchedulePlaceIcon(stats.label),
+      count: stats.count,
+    })
+  }
+
+  return result.sort((a, b) =>
+    (b.count ?? 0) - (a.count ?? 0)
+    || Number(Boolean(b.fromPreset)) - Number(Boolean(a.fromPreset))
+    || a.label.localeCompare(b.label, 'ru'),
+  )
 }
 
 export function parseScheduleSlugFromPath(path: string): ScheduleTitleValue {
@@ -166,6 +269,48 @@ export function createEmptyScheduleRow(blockDate?: string): ScheduleRow {
   }
 }
 
+/** Сдвиг даты ДД.ММ.ГГГГ на указанное число дней. */
+export function addDaysToScheduleDate(dateStr: string, days: number): string | undefined {
+  const parsed = parseScheduleDateString(dateStr)
+  if (!parsed)
+    return undefined
+  const shifted = parsed.add({ days })
+  return formatScheduleDateString(shifted)
+}
+
+/**
+ * Копия мероприятия для создания новой записи: тема, место, участники, флаги.
+ * Файлы не копируются; дата по умолчанию — через неделю от исходной.
+ */
+export function cloneScheduleRowForCopy(
+  source: ScheduleRow,
+  options?: { targetDate?: string },
+): ScheduleRow {
+  const sourceDate = source.detail?.date?.trim() ?? ''
+  const targetDate = options?.targetDate
+    ?? (sourceDate ? addDaysToScheduleDate(sourceDate, 7) : '')
+
+  return {
+    time: source.detail?.allDay ? '' : source.time,
+    placeLabel: source.placeLabel,
+    placeAddress: source.placeAddress,
+    topic: source.topic,
+    participants: source.participants.map(p => ({
+      ...p,
+      card: { ...p.card },
+    })),
+    attachmentsLabel: '',
+    attachmentFiles: [],
+    hidden: Boolean(source.hidden),
+    attachmentsHidden: Boolean(source.attachmentsHidden),
+    detail: {
+      date: targetDate ?? '',
+      allDay: Boolean(source.detail?.allDay),
+      completed: false,
+    },
+  }
+}
+
 /** Уникальный ключ участника (для фильтра и выбора). */
 export function scheduleParticipantKey(participant: ScheduleParticipant): string {
   return participant.externalId != null
@@ -181,6 +326,11 @@ export function isScheduleRowViewRestricted(row: ScheduleRow): boolean {
 /** Скрытые файлы без доступа: в графике видно количество, содержимое недоступно. */
 export function isScheduleRowAttachmentsRestricted(row: ScheduleRow): boolean {
   return Boolean(row.attachmentsHidden && row.attachmentsRestricted)
+}
+
+/** Скрытые файлы с доступом: содержимое видно, но отмечено как скрытое для остальных. */
+export function isScheduleRowAttachmentsHiddenForOthers(row: ScheduleRow): boolean {
+  return Boolean(row.attachmentsHidden && !row.attachmentsRestricted)
 }
 
 export function isScheduleAttachmentRedacted(file: ScheduleAttachmentFile, row?: ScheduleRow): boolean {
@@ -493,7 +643,7 @@ export function findScheduleBlockIdByDate(
 }
 
 export function parseScheduleDayBlockTitle(title: string): ScheduleDayBlockTitleParts | null {
-  const relative = title.match(/^(Сегодня|Завтра|Послезавтра)\s+(\d{2}\.\d{2}\.\d{4})\s+(.+)$/)
+  const relative = title.match(/^(Сегодня|Завтра|Послезавтра|Вчера|Позавчера)\s+(\d{2}\.\d{2}\.\d{4})\s+(.+)$/)
   if (relative)
     return { relativeDay: relative[1], date: relative[2], weekday: relative[3] }
   const plain = title.match(/^(\d{2}\.\d{2}\.\d{4})\s+(.+)$/)
@@ -502,8 +652,73 @@ export function parseScheduleDayBlockTitle(title: string): ScheduleDayBlockTitle
   return null
 }
 
-/** Сколько дней подряд показывать в графике (первый — всегда сегодня). */
-export const SCHEDULE_VISIBLE_DAYS = 7
+/** Сколько дней вперёд от сегодня показывать в графике. */
+export const SCHEDULE_FUTURE_DAYS = 7
+
+/** @deprecated Используйте SCHEDULE_FUTURE_DAYS */
+export const SCHEDULE_VISIBLE_DAYS = SCHEDULE_FUTURE_DAYS
+
+/** Сколько прошлых дней подгружать в режиме «Архив». */
+export const SCHEDULE_ARCHIVE_PAST_DAYS = 30
+
+/** Блоки архива: по одному на каждую прошлую дату, где есть мероприятия. */
+export function buildArchiveBlocksFromEventDates(dateStrs: string[]): ScheduleDateBlock[] {
+  const unique = [...new Set(dateStrs)].filter((dateStr) => {
+    const parsed = parseScheduleDateString(dateStr)
+    return parsed != null && dayOffsetFromToday(parsed) < 0
+  })
+  unique.sort((a, b) => compareScheduleDateStrings(b, a))
+
+  const blocks = unique.map((dateStr, index) => {
+    const block = buildScheduleDateBlock(parseScheduleDateString(dateStr)!)
+    block.defaultOpen = index === 0
+    return block
+  })
+  return blocks
+}
+
+export type ScheduleDateBlocksRange = {
+  /** Дней в прошлом (относительно сегодня). */
+  pastDays?: number
+  /** Дней вперёд, включая сегодня. */
+  futureDays?: number
+  /** Перейти к дате: показать futureDays дней, начиная с этой даты (ДД.ММ.ГГГГ). */
+  jumpStartDate?: string
+}
+
+export function scheduleBlockIdForDate(dateStr: string): string {
+  return `date-${dateStr}`
+}
+
+/** Смещение даты относительно сегодня: -1 = вчера, 0 = сегодня, 1 = завтра. */
+export function dayOffsetFromToday(date: CalendarDate): number {
+  const t = today(getLocalTimeZone())
+  if (date.compare(t) === 0)
+    return 0
+
+  let cursor = t
+  let offset = 0
+  if (date.compare(t) > 0) {
+    while (cursor.compare(date) < 0) {
+      cursor = cursor.add({ days: 1 })
+      offset++
+    }
+    return offset
+  }
+
+  while (cursor.compare(date) > 0) {
+    cursor = cursor.add({ days: -1 })
+    offset--
+  }
+  return offset
+}
+
+export function findTodayScheduleBlock(
+  blocks: ScheduleDateBlock[],
+): ScheduleDateBlock | undefined {
+  const todayStr = formatScheduleDateString(today(getLocalTimeZone()))
+  return blocks.find(b => parseDateFromScheduleBlockTitle(b.title) === todayStr)
+}
 
 const WEEKDAY_NAMES_RU = [
   'Воскресенье',
@@ -520,16 +735,21 @@ function weekdayNameRu(date: CalendarDate): string {
   return WEEKDAY_NAMES_RU[jsDay]!
 }
 
-/** Заголовок блока дня: «Сегодня 18.05.2026 Вторник» или «21.05.2026 Четверг». */
-export function buildScheduleDayBlockTitle(date: CalendarDate, dayOffset: number): string {
+/** Заголовок блока дня: «Сегодня 18.05.2026 Вторник», «Вчера …» или «21.05.2026 Четверг». */
+export function buildScheduleDayBlockTitle(date: CalendarDate): string {
   const dateStr = formatScheduleDateString(date)
   const weekday = weekdayNameRu(date)
-  if (dayOffset === 0)
+  const offset = dayOffsetFromToday(date)
+  if (offset === 0)
     return `Сегодня ${dateStr} ${weekday}`
-  if (dayOffset === 1)
+  if (offset === 1)
     return `Завтра ${dateStr} ${weekday}`
-  if (dayOffset === 2)
+  if (offset === 2)
     return `Послезавтра ${dateStr} ${weekday}`
+  if (offset === -1)
+    return `Вчера ${dateStr} ${weekday}`
+  if (offset === -2)
+    return `Позавчера ${dateStr} ${weekday}`
   return `${dateStr} ${weekday}`
 }
 
@@ -544,25 +764,91 @@ export function buildScheduleDayBlockHeading(title: string): {
   const isRelative = parts.relativeDay === 'Сегодня'
     || parts.relativeDay === 'Завтра'
     || parts.relativeDay === 'Послезавтра'
+    || parts.relativeDay === 'Вчера'
+    || parts.relativeDay === 'Позавчера'
   return {
     dayAndDate: isRelative ? `${parts.relativeDay} ${parts.date}` : parts.date,
     weekday: parts.weekday
   }
 }
 
-/** Блоки графика: каждый день подряд, первый — сегодня (без мероприятий — подгружаются с API). */
-export function createScheduleDateBlocks(
-  referenceDate: CalendarDate = today(getLocalTimeZone())
-): ScheduleDateBlock[] {
-  const blocks: ScheduleDateBlock[] = []
-  for (let offset = 0; offset < SCHEDULE_VISIBLE_DAYS; offset++) {
-    const date = referenceDate.add({ days: offset })
-    blocks.push({
-      id: `day-${offset}`,
-      title: buildScheduleDayBlockTitle(date, offset),
-      defaultOpen: true,
-      groups: [],
-    })
+function compareScheduleDateStrings(a: string, b: string): number {
+  const da = parseScheduleDateString(a)
+  const db = parseScheduleDateString(b)
+  if (!da || !db)
+    return 0
+  return da.compare(db)
+}
+
+function buildScheduleDateBlock(date: CalendarDate): ScheduleDateBlock {
+  const offset = dayOffsetFromToday(date)
+  const dateStr = formatScheduleDateString(date)
+  return {
+    id: scheduleBlockIdForDate(dateStr),
+    title: buildScheduleDayBlockTitle(date),
+    defaultOpen: offset >= 0 && offset <= 1,
+    groups: [],
+    isArchive: offset < 0,
   }
-  return blocks
+}
+
+/** Блоки графика: по умолчанию сегодня + будущее; в режиме архива — только прошлые дни. */
+export function createScheduleDateBlocks(
+  range: ScheduleDateBlocksRange = {},
+): ScheduleDateBlock[] {
+  const futureDays = Math.max(1, range.futureDays ?? SCHEDULE_FUTURE_DAYS)
+  const ref = today(getLocalTimeZone())
+
+  if (range.jumpStartDate) {
+    const jumpDate = parseScheduleDateString(range.jumpStartDate)
+    if (!jumpDate)
+      return createScheduleDateBlocks({ futureDays })
+    const blocks: ScheduleDateBlock[] = []
+    for (let i = 0; i < futureDays; i++) {
+      const date = jumpDate.add({ days: i })
+      if (dayOffsetFromToday(date) >= 0)
+        break
+      blocks.push(buildScheduleDateBlock(date))
+    }
+    if (blocks[0])
+      blocks[0].defaultOpen = true
+    return blocks
+  }
+
+  const currentAndFuture: ScheduleDateBlock[] = []
+  for (let offset = 0; offset < futureDays; offset++)
+    currentAndFuture.push(buildScheduleDateBlock(ref.add({ days: offset })))
+
+  return currentAndFuture
+}
+
+/** Добавляет блок дня в список, если его ещё нет (уведомления, прошлые даты). */
+export function ensureScheduleBlockForDate(
+  blocks: ScheduleDateBlock[],
+  dateStr: string,
+): ScheduleDateBlock {
+  const existingId = findScheduleBlockIdByDate(blocks, dateStr)
+  if (existingId) {
+    const found = blocks.find(b => b.id === existingId)
+    if (found)
+      return found
+  }
+
+  const parsed = parseScheduleDateString(dateStr)
+  if (!parsed)
+    throw new Error(`Некорректная дата: ${dateStr}`)
+
+  const block = buildScheduleDateBlock(parsed)
+  block.defaultOpen = true
+  blocks.push(block)
+  blocks.sort((a, b) => {
+    const da = parseDateFromScheduleBlockTitle(a.title) ?? ''
+    const db = parseDateFromScheduleBlockTitle(b.title) ?? ''
+    const aArchive = a.isArchive ? 1 : 0
+    const bArchive = b.isArchive ? 1 : 0
+    if (aArchive !== bArchive)
+      return aArchive - bArchive
+    return compareScheduleDateStrings(da, db)
+  })
+  return block
 }

@@ -4,13 +4,19 @@ import type {
   ScheduleParticipant,
   ScheduleRow,
   ScheduleSubstituteSlug,
+  ScheduleTitleValue,
   ScheduleUserGroup,
 } from '../types/schedule'
 import {
+  buildSchedulePlaceQuickOptions,
   createScheduleDateBlocks,
+  buildArchiveBlocksFromEventDates,
+  ensureScheduleBlockForDate,
   ensureScheduleRowDetailMeta,
   findScheduleBlockIdByDate,
+  parseDateFromScheduleBlockTitle,
   scheduleParticipantKey,
+  type SchedulePlaceQuickOption,
 } from '../utils/schedule'
 import { ensureSubstituteGroup, isScheduleSubstituteSlug } from '../config/schedule'
 
@@ -109,6 +115,32 @@ export function mergeEventsIntoBlocks(
   }
 }
 
+export function buildArchiveBlocksFromEvents(events: ApiEvent[]): ScheduleDateBlock[] {
+  const dates: string[] = []
+  for (const event of events) {
+    if (!isScheduleSubstituteSlug(event.substituteSlug))
+      continue
+    dates.push(event.eventDate)
+  }
+  return buildArchiveBlocksFromEventDates(dates)
+}
+
+export function buildSchedulePlaceQuickOptionsFromEvents(
+  events: ApiEvent[],
+  scope: ScheduleTitleValue,
+): SchedulePlaceQuickOption[] {
+  const filtered = scope === 'general'
+    ? events
+    : events.filter(event => event.substituteSlug === scope)
+
+  return buildSchedulePlaceQuickOptions(
+    filtered.map(event => ({
+      placeLabel: event.placeLabel,
+      placeAddress: event.placeAddress,
+    })),
+  )
+}
+
 export function scheduleRowToApiPayload(
   row: ScheduleRow,
   substituteSlug: ScheduleSubstituteSlug,
@@ -162,9 +194,10 @@ export function buildScheduleEventSelection(event: ApiEvent): ScheduleSelection 
   if (!event.substituteSlug || !isScheduleSubstituteSlug(event.substituteSlug))
     return null
 
-  const blocks = createScheduleDateBlocks()
-  const blockId = findScheduleBlockIdByDate(blocks, event.eventDate)
-  const block = (blockId ? blocks.find(b => b.id === blockId) : undefined) ?? blocks[0]
+  const blocks = createScheduleDateBlocks({ pastDays: 90, futureDays: 7 })
+  let block = blocks.find(b => parseDateFromScheduleBlockTitle(b.title) === event.eventDate)
+  if (!block)
+    block = ensureScheduleBlockForDate(blocks, event.eventDate)
   if (!block)
     return null
 

@@ -8,6 +8,7 @@ import {
   scheduleNavbarAvatar,
   scheduleNavbarHeading,
   scheduleTitleOptions,
+  scheduleAttachmentsColumnWidth,
 } from '../../config/schedule'
 import { useParticipants } from '../../composables/useParticipants'
 import { useDragScroll } from '../../composables/useDragScroll'
@@ -15,7 +16,7 @@ import { useWheelHorizontalScroll } from '../../composables/useWheelHorizontalSc
 import { usePermissions } from '../../composables/usePermissions'
 import { useScheduleApi } from '../../composables/useScheduleApi'
 import { fetchEventById } from '../../api/events'
-import { buildScheduleEventSelection } from '../../api/schedule-mapper'
+import { buildScheduleEventSelection, buildSchedulePlaceQuickOptionsFromEvents } from '../../api/schedule-mapper'
 import type {
   ScheduleAttachmentFile,
   ScheduleDateBlock,
@@ -29,6 +30,7 @@ import type {
 import {
   collectBlockEntriesSortedByTime,
   createEmptyScheduleRow,
+  cloneScheduleRowForCopy,
   filterScheduleBlocks,
   filterScheduleBySubstitute,
   ensureSubstituteGroup,
@@ -37,15 +39,22 @@ import {
   personAvatarChip,
   isScheduleRowAllDay,
   isScheduleRowViewRestricted,
+  isScheduleRowAttachmentsHiddenForOthers,
   buildScheduleDayBlockHeading,
+  findScheduleBlockIdByDate,
+  findTodayScheduleBlock,
   parseDateFromScheduleBlockTitle,
+  SCHEDULE_FUTURE_DAYS,
+  type ScheduleDateBlocksRange,
   parseScheduleSlugFromPath,
   scheduleParticipantKey,
   schedulePathForSlug,
 } from '../../utils/schedule'
+import ScheduleArchivePopover from './ScheduleArchivePopover.vue'
 import ScheduleAttachmentsPopover from './ScheduleAttachmentsPopover.vue'
 import ScheduleEventSlideover from './ScheduleEventSlideover.vue'
 import ScheduleHiddenBadge from './ScheduleHiddenBadge.vue'
+import ScheduleHiddenAttachmentsBadge from './ScheduleHiddenAttachmentsBadge.vue'
 import ScheduleHiddenEventLabel from './ScheduleHiddenEventLabel.vue'
 import ScheduleParticipantPopoverChip from './ScheduleParticipantPopoverChip.vue'
 import PersonAvatar from '../PersonAvatar.vue'
@@ -67,23 +76,45 @@ interface ScheduleBoardColumn {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { loadBlocks, saveEvent, deleteEvent, loading: scheduleLoading, error: scheduleError } = useScheduleApi()
+const { loadBlocks, saveEvent, deleteEvent, loading: scheduleLoading, error: scheduleError, events: scheduleEvents } = useScheduleApi()
 const { participants: crmParticipants, load: loadParticipants } = useParticipants()
 const { canEditSchedule, canEditSubstituteSlug } = usePermissions()
 
 const view = useLocalStorage<'list' | 'board'>('grafic.schedule.view', 'list')
 
 const scheduleBlocks = ref<ScheduleDateBlock[]>([])
+const scheduleArchiveEnabled = useLocalStorage('grafic.schedule.archive', false)
+const scheduleJumpStartDate = ref<string | null>(null)
+
+const scheduleArchiveActive = computed(() =>
+  scheduleArchiveEnabled.value || Boolean(scheduleJumpStartDate.value),
+)
+
+const scheduleBlocksRange = computed((): ScheduleDateBlocksRange => ({
+  pastDays: scheduleArchiveEnabled.value && !scheduleJumpStartDate.value
+    ? 1
+    : 0,
+  futureDays: SCHEDULE_FUTURE_DAYS,
+  jumpStartDate: scheduleJumpStartDate.value ?? undefined,
+}))
 
 async function refreshSchedule() {
-  scheduleBlocks.value = await loadBlocks()
+  scheduleBlocks.value = await loadBlocks(scheduleBlocksRange.value)
 }
+
+watch(scheduleBlocksRange, () => {
+  refreshSchedule()
+}, { deep: true })
 
 onMounted(async () => {
   await Promise.all([refreshSchedule(), loadParticipants()])
 })
 
 const scope = computed<ScheduleTitleValue>(() => parseScheduleSlugFromPath(route.path))
+
+const schedulePlaceQuickOptions = computed(() =>
+  buildSchedulePlaceQuickOptionsFromEvents(scheduleEvents.value, scope.value),
+)
 
 const isScheduleGeneralView = computed(() => scope.value === 'general')
 
@@ -100,8 +131,8 @@ const substituteSlug = computed(() =>
 
 const scheduleGridTemplate = computed(() =>
   isScheduleGeneralView.value
-    ? '77px 200px 256px 1fr 1fr 140px'
-    : '77px 256px 1fr 1fr 140px 52px')
+    ? `77px 200px 256px 1fr 1fr ${scheduleAttachmentsColumnWidth}`
+    : `77px 256px 1fr 1fr ${scheduleAttachmentsColumnWidth} 52px`)
 
 /** Объединение колонок «место … приложения» для скрытого мероприятия без доступа к деталям. */
 function hiddenEventDetailsGridColumn(generalView: boolean): string {
@@ -129,6 +160,30 @@ const filteredBlocks = computed(() =>
     searchQuery.value,
     selectedParticipantKeys.value
   ))
+
+interface ScheduleListSection {
+  key: string
+  label?: string
+  blocks: ScheduleDateBlock[]
+}
+
+const scheduleListSections = computed((): ScheduleListSection[] => {
+  if (scheduleArchiveActive.value) {
+    return [{
+      key: 'archive',
+      label: 'Архив',
+      blocks: filteredBlocks.value,
+    }]
+  }
+
+  return [{ key: 'primary', blocks: filteredBlocks.value }]
+})
+
+const boardSourceBlocks = computed(() => {
+  if (scheduleArchiveActive.value)
+    return filteredBlocks.value
+  return filteredBlocks.value.filter(b => !b.isArchive)
+})
 
 const hasActiveFilters = computed(() =>
   searchQuery.value.trim().length > 0 || selectedParticipantKeys.value.length > 0)
@@ -205,7 +260,7 @@ function dayEntryKey(blockId: string, entry: ScheduleDayEntry, index: number): s
 }
 
 const boardColumns = computed<ScheduleBoardColumn[]>(() =>
-  filteredBlocks.value.map(block => ({
+  boardSourceBlocks.value.map(block => ({
     block,
     cards: dayEntries(block).map((entry, index) => ({
       block,
@@ -265,6 +320,7 @@ useWheelHorizontalScroll(boardScrollRef)
 const eventDetailOpen = ref(false)
 const eventSlideoverEditable = ref(false)
 const eventSlideoverCreateMode = ref(false)
+const eventSlideoverCopyMode = ref(false)
 const createDayBlockId = ref('')
 const pendingCreateRow = ref<ScheduleRow | null>(null)
 const eventSelection = ref<{
@@ -285,7 +341,9 @@ function resolveCreateTargetBlock(preferredId?: string): ScheduleDateBlock | und
     if (preferred)
       return preferred
   }
-  return blocks.find(b => b.id === 'day-0') ?? blocks[0]
+  return blocks.find(b => b.id === createDayBlockId.value)
+    ?? findTodayScheduleBlock(blocks)
+    ?? blocks[0]
 }
 
 function syncCreateSelection() {
@@ -329,6 +387,40 @@ function onCreateEvent(block?: ScheduleDateBlock) {
   pendingCreateRow.value = createEmptyScheduleRow(blockDate)
   createDayBlockId.value = target.id
   eventSlideoverCreateMode.value = true
+  eventSlideoverCopyMode.value = false
+  eventSlideoverEditable.value = true
+  syncCreateSelection()
+  eventDetailOpen.value = true
+}
+
+function onCopyEvent(block: ScheduleDateBlock, group: ScheduleUserGroup, row: ScheduleRow) {
+  if (!canEditGroup(group))
+    return
+  if (isScheduleRowViewRestricted(row)) {
+    toast.add({
+      title: 'Нельзя скопировать',
+      description: 'Недостаточно данных о мероприятии.',
+      color: 'warning',
+    })
+    return
+  }
+
+  const copyRow = cloneScheduleRowForCopy(row)
+  const copyDate = copyRow.detail?.date?.trim()
+  let targetBlock = block
+  if (copyDate) {
+    const blockId = findScheduleBlockIdByDate(scheduleBlocks.value, copyDate)
+    if (blockId) {
+      const resolved = scheduleBlocks.value.find(b => b.id === blockId)
+      if (resolved)
+        targetBlock = resolved
+    }
+  }
+
+  pendingCreateRow.value = copyRow
+  createDayBlockId.value = targetBlock.id
+  eventSlideoverCreateMode.value = true
+  eventSlideoverCopyMode.value = true
   eventSlideoverEditable.value = true
   syncCreateSelection()
   eventDetailOpen.value = true
@@ -341,6 +433,8 @@ function openEventDetail(
   editable = false
 ) {
   eventSlideoverEditable.value = editable
+  eventSlideoverCreateMode.value = false
+  eventSlideoverCopyMode.value = false
   eventSelection.value = {
     block,
     group,
@@ -362,9 +456,10 @@ async function openEventFromNotification(eventId: number) {
       await router.push(schedulePathForSlug(selection.group.substituteKey))
     }
 
-    eventSlideoverCreateMode.value = false
-    eventSlideoverEditable.value = false
-    eventSelection.value = {
+  eventSlideoverCreateMode.value = false
+  eventSlideoverCopyMode.value = false
+  eventSlideoverEditable.value = false
+  eventSelection.value = {
       ...selection,
       initialAttachments: selection.row.attachmentFiles.map(f => ({ ...f })),
     }
@@ -383,6 +478,7 @@ watch(eventDetailOpen, (isOpen) => {
     eventSelection.value = null
     eventSlideoverEditable.value = false
     eventSlideoverCreateMode.value = false
+    eventSlideoverCopyMode.value = false
     pendingCreateRow.value = null
     createDayBlockId.value = ''
   }
@@ -397,12 +493,20 @@ function onEventSlideoverEdit() {
   eventSlideoverEditable.value = true
 }
 
+function onEventSlideoverCopy() {
+  const s = eventSelection.value
+  if (!s)
+    return
+  onCopyEvent(s.block, s.group, s.row)
+}
+
 async function onEventSlideoverSaved() {
   const s = eventSelection.value
   if (!s)
     return
 
   const wasCreate = eventSlideoverCreateMode.value
+  const wasCopy = eventSlideoverCopyMode.value
 
   try {
     const saved = await saveEvent(
@@ -417,12 +521,15 @@ async function onEventSlideoverSaved() {
       s.group.rows.push(s.row)
 
     eventSlideoverCreateMode.value = false
+    eventSlideoverCopyMode.value = false
     pendingCreateRow.value = null
     createDayBlockId.value = ''
 
     await refreshSchedule()
     toast.add({
-      title: wasCreate ? 'Мероприятие создано' : 'Изменения сохранены',
+      title: wasCreate
+        ? (wasCopy ? 'Мероприятие скопировано' : 'Мероприятие создано')
+        : 'Изменения сохранены',
       description: saved.topic.trim() || 'Запись в графике обновлена.',
       color: 'success',
     })
@@ -477,6 +584,13 @@ function rowContextMenuItems(
       }
     },
     {
+      label: 'Копировать',
+      icon: 'i-lucide-copy',
+      onSelect() {
+        onCopyEvent(block, group, row)
+      }
+    },
+    {
       label: 'Удалить',
       icon: 'i-lucide-trash-2',
       color: 'error',
@@ -490,6 +604,7 @@ function rowContextMenuItems(
 function onEditEvent(block: ScheduleDateBlock, group: ScheduleUserGroup, row: ScheduleRow) {
   if (!canEditGroup(group))
     return
+  eventSlideoverCopyMode.value = false
   openEventDetail(block, group, row, true)
 }
 
@@ -616,6 +731,11 @@ function cancelDeleteEvent() {
             @click="resetScheduleFilters"
           />
 
+          <ScheduleArchivePopover
+            v-model:archive-enabled="scheduleArchiveEnabled"
+            v-model:jump-start-date="scheduleJumpStartDate"
+          />
+
           <UButton
             v-if="canCreateEvents"
             label="Добавить"
@@ -704,7 +824,7 @@ function cancelDeleteEvent() {
                 />
               </div>
 
-              <div class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+              <div class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none">
                 <UEmpty
                   v-if="!col.cards.length"
                   size="sm"
@@ -821,7 +941,16 @@ function cancelDeleteEvent() {
                           class="inline-flex shrink-0 items-center gap-1 text-xs text-dimmed"
                           :title="c.row.attachmentsLabel"
                         >
-                          <UIcon name="i-lucide-paperclip" class="size-3.5" aria-hidden="true" />
+                          <ScheduleHiddenAttachmentsBadge
+                            v-if="isScheduleRowAttachmentsHiddenForOthers(c.row)"
+                            variant="icon"
+                          />
+                          <UIcon
+                            v-else
+                            name="i-lucide-paperclip"
+                            class="size-3.5"
+                            aria-hidden="true"
+                          />
                           <span class="tabular-nums">{{ c.row.attachmentFiles.length }}</span>
                         </span>
                       </div>
@@ -856,14 +985,31 @@ function cancelDeleteEvent() {
               <div class="border-default flex h-12 items-center border-r px-1.5 py-3.5">
                 <span class="rounded-md px-2.5 py-1.5">Участники</span>
               </div>
-              <div class="border-default flex h-12 items-center border-r px-1.5 py-3.5">
-                <span class="rounded-md px-2.5 py-1.5">Приложения</span>
+              <div class="border-default flex h-12 items-center justify-center border-r px-1.5 py-3.5">
+                <span class="rounded-md px-2.5 py-1.5 text-center">Приложения</span>
               </div>
               <div v-if="!isScheduleGeneralView" class="border-default flex h-12 items-center justify-center px-1"
                 aria-hidden="true" />
             </div>
 
-            <UCollapsible v-for="block in filteredBlocks" :key="block.id" :default-open="block.defaultOpen">
+            <template
+              v-for="section in scheduleListSections"
+              :key="section.key"
+            >
+              <div
+                v-if="section.label"
+                class="sticky top-12 z-10 flex items-center gap-2 border-b border-default bg-elevated/80 px-4 py-3 backdrop-blur-sm"
+              >
+                <UIcon name="i-lucide-archive" class="size-4 text-muted" aria-hidden="true" />
+                <span class="text-sm font-semibold text-highlighted">{{ section.label }}</span>
+                <span class="text-xs text-muted">прошлые дни</span>
+              </div>
+
+              <UCollapsible
+                v-for="block in section.blocks"
+                :key="block.id"
+                :default-open="block.defaultOpen"
+              >
               <template #default="{ open }">
                 <UButton color="neutral" variant="ghost"
                   class="sticky top-12 z-10 flex w-full items-center justify-start gap-3 rounded-none border-b border-accented bg-default px-4 py-4 text-highlighted hover:bg-elevated">
@@ -957,9 +1103,13 @@ function cancelDeleteEvent() {
                           />
                         </div>
                         <div
-                          class="flex min-h-[100px] min-w-0 items-center justify-center border-r border-default px-3 py-4"
+                          class="flex min-h-[100px] flex-col items-center justify-center gap-2 border-r border-default px-1.5 py-4"
                           @click.stop
                         >
+                          <ScheduleHiddenAttachmentsBadge
+                            v-if="isScheduleRowAttachmentsHiddenForOthers(entry.row)"
+                            variant="table"
+                          />
                           <ScheduleAttachmentsPopover
                             v-if="entry.row.attachmentFiles.length"
                             variant="table"
@@ -985,6 +1135,7 @@ function cancelDeleteEvent() {
                 </div>
               </template>
             </UCollapsible>
+            </template>
           </div>
         </div>
       </div>
@@ -995,11 +1146,14 @@ function cancelDeleteEvent() {
         :selection="eventSelection"
         :editable="eventSlideoverEditable"
         :is-create="eventSlideoverCreateMode"
+        :is-copy="eventSlideoverCopyMode"
         :create-day-blocks="createDayBlocks"
         :available-participants="scheduleParticipants"
+        :place-quick-options="schedulePlaceQuickOptions"
         :can-edit="eventSelection ? canEditGroup(eventSelection.group) : false"
         @saved="onEventSlideoverSaved"
         @edit="onEventSlideoverEdit"
+        @copy="onEventSlideoverCopy"
       />
 
       <UModal v-model:open="deleteModalOpen" title="Удалить мероприятие?" :description="deleteModalDescription">

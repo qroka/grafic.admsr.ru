@@ -6,6 +6,7 @@ import {
 import { apiFetch } from '../api/client'
 import {
   apiEventToScheduleRow,
+  buildArchiveBlocksFromEvents,
   mergeEventsIntoBlocks,
   scheduleRowToApiPayload,
 } from '../api/schedule-mapper'
@@ -17,7 +18,11 @@ import type {
   ScheduleUserGroup,
 } from '../types/schedule'
 import { assertUploadFilesValid } from '../config/uploads'
-import { createScheduleDateBlocks, parseDateFromScheduleBlockTitle } from '../utils/schedule'
+import {
+  createScheduleDateBlocks,
+  parseDateFromScheduleBlockTitle,
+  type ScheduleDateBlocksRange,
+} from '../utils/schedule'
 
 function pendingUploadFiles(attachments: ScheduleAttachmentFile[]): File[] {
   return attachments
@@ -62,18 +67,33 @@ export async function syncEventAttachments(
 export function useScheduleApi() {
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const events = ref<ApiEvent[]>([])
 
-  async function loadBlocks(): Promise<ScheduleDateBlock[]> {
+  async function loadBlocks(range?: ScheduleDateBlocksRange): Promise<ScheduleDateBlock[]> {
     loading.value = true
     error.value = null
     try {
-      const blocks = createScheduleDateBlocks()
       const res = await apiFetch<{ success: boolean, events: ApiEvent[] }>('/api/events')
+      events.value = res.events
+
+      if (range?.jumpStartDate) {
+        const blocks = createScheduleDateBlocks(range)
+        mergeEventsIntoBlocks(blocks, res.events)
+        return blocks
+      }
+
+      if ((range?.pastDays ?? 0) > 0) {
+        const blocks = buildArchiveBlocksFromEvents(res.events)
+        mergeEventsIntoBlocks(blocks, res.events)
+        return blocks
+      }
+
+      const blocks = createScheduleDateBlocks(range ?? {})
       mergeEventsIntoBlocks(blocks, res.events)
       return blocks
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Не удалось загрузить график'
-      return createScheduleDateBlocks()
+      return createScheduleDateBlocks(range ?? {})
     } finally {
       loading.value = false
     }
@@ -142,6 +162,7 @@ export function useScheduleApi() {
   return {
     loading,
     error,
+    events,
     loadBlocks,
     saveEvent,
     deleteEvent,
